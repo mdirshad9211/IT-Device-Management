@@ -1,0 +1,420 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum AppUserRole {
+  SUPER_ADMIN
+  DGN_IT_MANAGER
+  SERVICE_MANAGER
+  IT_ENGINEER
+  CLIENT_MANAGER
+  EMPLOYEE
+}
+
+enum DeviceStatus {
+  ACTIVE
+  DISCARDED
+  RETIRED
+  SCRAPPED
+  DELETED
+}
+
+enum PollStatus {
+  OK
+  NETWORK_FAILURE
+  SYSTEM_RESOURCE_FAILURE
+}
+
+enum SoftwareChangeAction {
+  ADDED
+  REMOVED
+}
+
+enum HardwareChangeType {
+  PCI_CARD
+  SOUND_CARD
+  CONNECTED_DEVICE
+  RAM
+  STORAGE
+}
+
+enum OtherDeviceType {
+  RAM
+  HDD
+  SSD
+  NVME
+  MOUSE
+  KEYBOARD
+  BATTERY
+  PRINTER
+  WIFI_DONGLE
+  WIFI_ROUTER
+  SWITCH
+  CAMERA
+  PCI_CARD
+  SCANNER
+  MONITOR
+  LAPTOP_SCREEN
+  LAPTOP_KEYBOARD
+  LAPTOP_TRACKPAD
+  CONNECTOR
+  FIREWALL
+  LOAD_BALANCER
+  OTHER
+}
+
+enum OtherDeviceStatus {
+  ACTIVE
+  INACTIVE
+  DAMAGED
+  IN_REPAIR
+  SCRAPPED
+  RETIRED
+  STOCK
+}
+
+enum WarrantyStatus {
+  UNDER_WARRANTY
+  EXPIRED
+  NO_WARRANTY
+}
+
+enum LifecycleEventType {
+  DISCARD
+  AUTO_DELETE
+  MANUAL_DELETE
+  REACTIVATE
+  RETIRE
+  SCRAP
+  LOCATION_CHANGE
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+enum NotificationType {
+  DEVICE_ALLOTMENT
+  STORAGE_THRESHOLD
+  DISCARD_WARNING
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// ─────────────────────────────────────────────
+// CORE ENTITIES
+// ─────────────────────────────────────────────
+
+model Client {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  currentLocation String   @map("current_location")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  locations           SiteLocation[]
+  devices             Device[]
+  otherNetworkDevices OtherNetworkDevice[]
+  engineerAssignments EngineerAssignment[]
+
+  @@map("clients")
+}
+
+model SiteLocation {
+  id           String   @id @default(uuid())
+  clientId     String   @map("client_id")
+  locationName String   @map("location_name")
+  isCurrent    Boolean  @default(true) @map("is_current")
+  changedAt    DateTime @default(now()) @map("changed_at")
+
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@index([clientId])
+  @@map("site_locations")
+}
+
+model AppUser {
+  id        String      @id @default(uuid())
+  name      String
+  email     String      @unique
+  role      AppUserRole
+  isActive  Boolean     @default(true) @map("is_active")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  engineerAssignments EngineerAssignment[]
+  lifecycleEvents     DeviceLifecycleEvent[]
+  auditLogs           AuditLog[]
+  employeeAssignments DeviceAssignment[] @relation("AssignmentEmployee")
+  managerAssignments  DeviceAssignment[] @relation("AssignmentManager")
+
+  @@map("app_users")
+}
+
+model EngineerAssignment {
+  id           String    @id @default(uuid())
+  appUserId    String    @map("app_user_id")
+  clientId     String    @map("client_id")
+  isActive     Boolean   @default(true) @map("is_active")
+  assignedAt   DateTime  @default(now()) @map("assigned_at")
+  unassignedAt DateTime? @map("unassigned_at")
+
+  appUser AppUser @relation(fields: [appUserId], references: [id])
+  client  Client  @relation(fields: [clientId], references: [id])
+
+  @@index([appUserId, isActive])
+  @@index([clientId, isActive])
+  @@map("engineer_assignments")
+}
+
+// ─────────────────────────────────────────────
+// SITE INVENTORY
+// ─────────────────────────────────────────────
+
+model Device {
+  id                 String       @id @default(uuid())
+  clientId           String       @map("client_id")
+  assetTag           String       @unique @map("asset_tag")
+  cpu                String?
+  ram                String?
+  storageTotal       String?      @map("storage_total")
+  storageUsedPercent Int?         @map("storage_used_percent")
+  pciCards           Json?        @map("pci_cards")
+  soundCards         Json?        @map("sound_cards")
+  connectedDevices   Json?        @map("connected_devices")
+  installedSoftware  Json?        @map("installed_software")
+
+  status        DeviceStatus @default(ACTIVE)
+  discardedAt   DateTime?    @map("discarded_at")
+  deletionDueAt DateTime?    @map("deletion_due_at")
+  retiredFlag   Boolean      @default(false) @map("retired_flag")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  client               Client                      @relation(fields: [clientId], references: [id])
+  qrCode               QrCode?
+  agent                Agent?
+  assignments          DeviceAssignment[]
+  lifecycleEvents      DeviceLifecycleEvent[]
+  otherNetworkDevices  OtherNetworkDevice[]
+  notifications        Notification[]
+  softwareEvents       DeviceSoftwareEvent[]
+  hardwareChangeEvents DeviceHardwareChangeEvent[]
+
+  @@index([clientId, status])
+  @@index([status, deletionDueAt])
+  @@map("devices")
+}
+
+model DeviceAssignment {
+  id           String @id @default(uuid())
+  deviceId     String @map("device_id")
+  userName     String @map("user_name")
+  userPhone    String @map("user_phone")
+  userEmail    String @map("user_email")
+  department   String
+  managerName  String @map("manager_name")
+  managerPhone String @map("manager_phone")
+  managerEmail String @map("manager_email")
+
+  // Nullable links to real login accounts — populated when an Admin has
+  // provisioned an AppUser for the employee/manager and linked it here. The
+  // allotment flow only ever LINKS an existing account (never creates one) —
+  // confirmed accounts are provisioned separately by an Admin. Free-text
+  // fields above remain the source of truth for contact info regardless of
+  // whether a login exists yet.
+  employeeUserId String? @map("employee_user_id")
+  managerUserId  String? @map("manager_user_id")
+
+  // Informational only (confirmed non-blocking, FR-LC-06) — set when the
+  // Client Manager acknowledges/verifies the assignment. Never gates
+  // Device.status; purely a display/reporting field.
+  managerAcknowledgedAt DateTime? @map("manager_acknowledged_at")
+
+  isCurrent    Boolean   @default(true) @map("is_current")
+  assignedAt   DateTime  @default(now()) @map("assigned_at")
+  unassignedAt DateTime? @map("unassigned_at")
+
+  device       Device   @relation(fields: [deviceId], references: [id])
+  employeeUser AppUser? @relation("AssignmentEmployee", fields: [employeeUserId], references: [id])
+  managerUser  AppUser? @relation("AssignmentManager", fields: [managerUserId], references: [id])
+
+  @@index([deviceId, isCurrent])
+  @@index([employeeUserId])
+  @@index([managerUserId])
+  @@map("device_assignments")
+}
+
+model QrCode {
+  id         String   @id @default(uuid())
+  deviceId   String   @unique @map("device_id")
+  qrValue    String   @unique @map("qr_value")
+  printCount Int      @default(0) @map("print_count")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  device Device @relation(fields: [deviceId], references: [id])
+
+  @@map("qr_codes")
+}
+
+model Agent {
+  id             String      @id @default(uuid())
+  deviceId       String      @unique @map("device_id")
+  clientId       String      @map("client_id")
+  version        String
+  apiKeyHash     String      @map("api_key_hash")
+  lastPollAt     DateTime?   @map("last_poll_at")
+  lastPollStatus PollStatus? @map("last_poll_status")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  device   Device         @relation(fields: [deviceId], references: [id])
+  pollLogs AgentPollLog[]
+
+  @@map("agents")
+}
+
+model AgentPollLog {
+  id       String     @id @default(uuid())
+  agentId  String     @map("agent_id")
+  payload  Json
+  status   PollStatus
+  isStale  Boolean    @default(false) @map("is_stale")
+  polledAt DateTime   @default(now()) @map("polled_at")
+
+  agent          Agent                       @relation(fields: [agentId], references: [id])
+  softwareEvents DeviceSoftwareEvent[]
+  hardwareEvents DeviceHardwareChangeEvent[]
+
+  @@index([agentId, polledAt])
+  @@map("agent_poll_logs")
+}
+
+// Structured, append-only history of installed-software changes (confirmed
+// requirement — not just a latest-snapshot overwrite). One row per
+// added/removed software item detected in a given poll.
+model DeviceSoftwareEvent {
+  id           String               @id @default(uuid())
+  deviceId     String               @map("device_id")
+  pollLogId    String?              @map("poll_log_id")
+  softwareName String               @map("software_name")
+  action       SoftwareChangeAction
+  detectedAt   DateTime             @default(now()) @map("detected_at")
+
+  device  Device        @relation(fields: [deviceId], references: [id])
+  pollLog AgentPollLog? @relation(fields: [pollLogId], references: [id])
+
+  @@index([deviceId, detectedAt])
+  @@map("device_software_events")
+}
+
+// Structured, append-only history of hardware-attribute changes (PCI/sound
+// cards, connected peripherals, RAM/storage) — same "confirmed structured
+// history" requirement as software, kept as a separate model since the
+// shape of a hardware change (previous/new value) differs from a software
+// add/remove event.
+model DeviceHardwareChangeEvent {
+  id            String             @id @default(uuid())
+  deviceId      String             @map("device_id")
+  pollLogId     String?            @map("poll_log_id")
+  changeType    HardwareChangeType @map("change_type")
+  previousValue Json?              @map("previous_value")
+  newValue      Json?              @map("new_value")
+  detectedAt    DateTime           @default(now()) @map("detected_at")
+
+  device  Device        @relation(fields: [deviceId], references: [id])
+  pollLog AgentPollLog? @relation(fields: [pollLogId], references: [id])
+
+  @@index([deviceId, detectedAt])
+  @@map("device_hardware_change_events")
+}
+
+model DeviceLifecycleEvent {
+  id          String             @id @default(uuid())
+  deviceId    String             @map("device_id")
+  eventType   LifecycleEventType @map("event_type")
+  performedBy String?            @map("performed_by")
+  metadata    Json?
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  device Device   @relation(fields: [deviceId], references: [id])
+  actor  AppUser? @relation(fields: [performedBy], references: [id])
+
+  @@index([deviceId])
+  @@map("device_lifecycle_events")
+}
+
+// ─────────────────────────────────────────────
+// OTHER NETWORK DEVICES
+// ─────────────────────────────────────────────
+
+model OtherNetworkDevice {
+  id                 String            @id @default(uuid())
+  clientId           String            @map("client_id")
+  type               OtherDeviceType
+  name               String
+  serialNumber       String?           @map("serial_number")
+  purchaseDate       DateTime?         @map("purchase_date") @db.Date
+  status             OtherDeviceStatus @default(STOCK)
+  attachedDeviceId   String?           @map("attached_device_id")
+  warrantyStatus     WarrantyStatus    @default(NO_WARRANTY) @map("warranty_status")
+  warrantyExpiryDate DateTime?         @map("warranty_expiry_date") @db.Date
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  client         Client  @relation(fields: [clientId], references: [id])
+  attachedDevice Device? @relation(fields: [attachedDeviceId], references: [id])
+
+  @@index([clientId, status])
+  @@index([attachedDeviceId])
+  @@map("other_network_devices")
+}
+
+// ─────────────────────────────────────────────
+// CROSS-CUTTING: AUDIT + NOTIFICATIONS
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id          String      @id @default(uuid())
+  entityType  String      @map("entity_type")
+  entityId    String      @map("entity_id")
+  action      AuditAction
+  performedBy String?     @map("performed_by")
+  before      Json?
+  after       Json?
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  actor AppUser? @relation(fields: [performedBy], references: [id])
+
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id         String             @id @default(uuid())
+  deviceId   String?            @map("device_id")
+  type       NotificationType
+  recipients Json
+  status     NotificationStatus @default(PENDING)
+  sentAt     DateTime?          @map("sent_at")
+  createdAt  DateTime           @default(now()) @map("created_at")
+
+  device Device? @relation(fields: [deviceId], references: [id])
+
+  @@index([status])
+  @@map("notifications")
+}

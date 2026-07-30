@@ -1,0 +1,79 @@
+import Fastify, { type FastifyInstance } from "fastify";
+import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
+import { randomUUID } from "node:crypto";
+
+import { logger } from "./shared/kernel/logger";
+import { prisma } from "./shared/kernel/prisma";
+import { redisConnection } from "./shared/kernel/queue";
+import errorHandlerPlugin from "./shared/http/plugins/error-handler";
+import { buildContainer } from "./config/container";
+
+import authRoutes from "./modules/auth/auth.routes";
+import clientRoutes from "./modules/client/client.routes";
+import deviceRoutes from "./modules/device/device.routes";
+import agentRoutes from "./modules/agent/agent.routes";
+import qrRoutes from "./modules/qr/qr.routes";
+import otherNetworkDeviceRoutes from "./modules/other-network-device/other-network-device.routes";
+import notificationRoutes from "./modules/notification/notification.routes";
+import auditRoutes from "./modules/audit/audit.routes";
+import userManagementRoutes from "./modules/user-management/user-management.routes";
+
+/**
+ * Builds (but does not start) a Fastify instance. Exported separately from
+ * server.ts so integration tests can call buildApp().inject(...) without
+ * binding a real port.
+ */
+export async function buildApp(): Promise<FastifyInstance> {
+  const app = Fastify({
+    loggerInstance: logger,
+    genReqId: () => randomUUID(),
+  });
+
+  // --- Core plugins ---
+  await app.register(cors, { origin: true });
+  await app.register(rateLimit, { max: 200, timeWindow: "1 minute" });
+  await app.register(errorHandlerPlugin);
+
+  // --- DI container, available on every request as request.container ---
+  const container = buildContainer();
+  app.decorateRequest("container", null);
+  app.addHook("onRequest", async (request) => {
+    request.container = container;
+  });
+
+  // --- Health check: verifies DB + Redis connectivity ---
+  app.get("/health", async (_request, reply) => {
+    const health = { status: "ok", db: "unknown", redis: "unknown" };
+
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      health.db = "ok";
+    } catch {
+      health.db = "unreachable";
+    }
+
+    try {
+      await redisConnection.ping();
+      health.redis = "ok";
+    } catch {
+      health.redis = "unreachable";
+    }
+
+    const isHealthy = health.db === "ok" && health.redis === "ok";
+    reply.status(isHealthy ? 200 : 503).send(health);
+  });
+
+  // --- Module routes (all stubs for now — see each module's routes file) ---
+  await app.register(authRoutes, { prefix: "/api/v1/auth" });
+  await app.register(clientRoutes, { prefix: "/api/v1/clients" });
+  await app.register(deviceRoutes, { prefix: "/api/v1/devices" });
+  await app.register(agentRoutes, { prefix: "/api/v1/agents" });
+  await app.register(qrRoutes, { prefix: "/api/v1/qr" });
+  await app.register(otherNetworkDeviceRoutes, { prefix: "/api/v1/other-network-devices" });
+  await app.register(notificationRoutes, { prefix: "/api/v1/notifications" });
+  await app.register(auditRoutes, { prefix: "/api/v1/audit-logs" });
+  await app.register(userManagementRoutes, { prefix: "/api/v1/users" });
+
+  return app;
+}

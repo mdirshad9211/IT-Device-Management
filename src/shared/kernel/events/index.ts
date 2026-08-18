@@ -27,6 +27,25 @@ export interface DomainEvents {
     linkedUserId: string;
     linkAs: "employee" | "manager";
   };
+  "client.created": { actorId: string; clientId: string; name: string };
+  "client.location_changed": {
+    actorId: string;
+    clientId: string;
+    previousLocation: string;
+    newLocation: string;
+  };
+  "client.engineer.assigned": {
+    actorId: string;
+    clientId: string;
+    engineerUserId: string;
+    assignmentId: string;
+  };
+  "client.engineer.offboarded": {
+    actorId: string;
+    clientId: string;
+    engineerUserId: string;
+    assignmentId: string;
+  };
 }
 
 export class DomainEventBus {

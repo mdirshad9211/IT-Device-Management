@@ -52,7 +52,12 @@ export async function buildApp(): Promise<FastifyInstance> {
     const health = { status: "ok", db: "unknown", redis: "unknown" };
 
     try {
-      await prisma.$queryRaw`SELECT 1`;
+      await Promise.race([
+        prisma.$queryRaw`SELECT 1`,
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error("db ping timeout")), 1000);
+        }),
+      ]);
       health.db = "ok";
     } catch {
       health.db = "unreachable";

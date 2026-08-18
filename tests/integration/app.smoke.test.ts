@@ -25,7 +25,6 @@ describe("app boilerplate smoke test", () => {
   });
 
   it.each([
-    "/api/v1/clients",
     "/api/v1/devices",
     "/api/v1/agents",
     "/api/v1/qr",
@@ -61,6 +60,25 @@ describe("app boilerplate smoke test", () => {
       method: "GET",
       url: "/api/v1/users",
       headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.code).toBe("FORBIDDEN");
+  });
+
+  it("GET /api/v1/clients without a JWT is 401, not a stub payload", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/v1/clients" });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error.code).toBe("UNAUTHORIZED");
+    expect(res.json().status).toBeUndefined();
+  });
+
+  it("POST /api/v1/clients as IT_ENGINEER is 403 (Client edit is staff-only)", async () => {
+    const token = app.jwt.sign({ userId: randomUUID(), role: AppUserRole.IT_ENGINEER });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/clients",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "Site A", currentLocation: "Delhi" },
     });
     expect(res.statusCode).toBe(403);
     expect(res.json().error.code).toBe("FORBIDDEN");

@@ -8,6 +8,9 @@ import { AuthController } from "../modules/auth/auth.controller";
 import { PrismaUserManagementRepository } from "../modules/user-management/user-management.repository";
 import { UserManagementService } from "../modules/user-management/user-management.service";
 import { UserManagementController } from "../modules/user-management/user-management.controller";
+import { PrismaClientRepository } from "../modules/client/client.repository";
+import { ClientService } from "../modules/client/client.service";
+import { ClientController } from "../modules/client/client.controller";
 
 /**
  * Shared infrastructure singletons plus module service/repository pairs.
@@ -28,6 +31,10 @@ export function buildContainer(): AwilixContainer {
     userManagementRepository: asClass(PrismaUserManagementRepository).singleton(),
     userManagementService: asClass(UserManagementService).singleton(),
     userManagementController: asClass(UserManagementController).singleton(),
+
+    clientRepository: asClass(PrismaClientRepository).singleton(),
+    clientService: asClass(ClientService).singleton(),
+    clientController: asClass(ClientController).singleton(),
   });
 
   return container;

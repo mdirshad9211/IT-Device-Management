@@ -10,7 +10,7 @@ export const paginationSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
-export type PaginationQuery = z.infer<typeof paginationSchema>;
+export type PaginationQuery = z.output<typeof paginationSchema>;
 
 export function toSkipTake(query: PaginationQuery): { skip: number; take: number } {
   return { skip: (query.page - 1) * query.pageSize, take: query.pageSize };

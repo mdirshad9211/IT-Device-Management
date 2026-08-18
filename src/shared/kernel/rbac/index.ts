@@ -1,20 +1,19 @@
-import type { AppUserRole } from "@prisma/client";
+export { AppUserRole, RBAC_ACTIONS, RBAC_ENTITIES, UNSCOPED_ROLES } from "./types";
+export type { AccessContext, CurrentDeviceAssignmentScope, RbacAction, RbacEntity } from "./types";
 
-export type { AppUserRole };
+export { PERMISSION_MATRIX, roleHasPermission } from "./permission-matrix";
 
-/**
- * BOILERPLATE PLACEHOLDER.
- *
- * The full PERMISSION_MATRIX (which role can do which action on which
- * entity), the requirePermission() Fastify hook, the client-scope check for
- * IT_ENGINEER, and the self-service scope check for CLIENT_MANAGER/EMPLOYEE
- * are business logic and are intentionally NOT implemented yet — they land
- * once the SRS/permissions review is signed off (see the reference backend
- * Cursor prompts, Prompt 3).
- *
- * Do not add authorization checks piecemeal into individual routes ahead of
- * that — every route below currently has NO authorization enforcement.
- * Treat every stub endpoint as unauthenticated/unsafe until this module is
- * built out.
- */
-export const RBAC_NOT_YET_IMPLEMENTED = true;
+export { assertRolePermission } from "./role-check";
+export { assertClientScope } from "./client-scope-check";
+export { assertSelfServiceScope } from "./self-service-scope-check";
+
+export {
+  clientScopeCheck,
+  enforceAccess,
+  rolePermissionCheck,
+  selfServiceScopeCheck,
+} from "./enforce-access";
+export type { AccessCheck } from "./enforce-access";
+
+export { requirePermission, requireRoles } from "./require-permission";
+export { requireAppUserAuth } from "./require-app-user-auth";

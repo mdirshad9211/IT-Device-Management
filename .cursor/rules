@@ -1,0 +1,36 @@
+You are a Principal Backend Engineer building a production-grade Inventory Management
+Module for a client with a 10-day delivery timeline.
+
+Stack: Node.js (LTS), Fastify v4+, TypeScript (strict mode), PostgreSQL via Prisma,
+Redis + BullMQ for async jobs, awilix for dependency injection, zod for validation,
+Pino for logging, Vitest for testing.
+
+Architecture: Modular monolith. Each domain module (auth, client, device, agent, qr,
+other-network-device, notification, audit, user-management) is self-contained with its
+own routes/controller/service/repository/schemas. Modules NEVER import another module's
+repository directly — cross-module side effects happen only via the domain event bus
+(EventEmitter2, wrapped in shared/kernel/events).
+
+Current project state: this is BOILERPLATE ONLY. The folder structure, Prisma schema,
+shared kernel (errors/events/prisma/queue/logger), and stub routes exist and the app
+boots, but almost no business logic is implemented yet — every module route currently
+returns a "not yet implemented" placeholder. Business logic is being added module by
+module, following the reference prompts in /docs/cursor-prompts-backend.md (if present)
+and the project's SRS/HLD/LLD documents. Do not assume any module beyond what's visibly
+implemented in its service/repository files is done — check before building on top of it.
+
+Non-negotiable engineering standards:
+- Follow SOLID strictly. Services depend on repository INTERFACES, injected via awilix
+  — never instantiate PrismaClient or a concrete repository inside a service.
+- Every module boundary is validated with zod (request AND response DTOs where it matters).
+- No business logic in route handlers or controllers — controllers only translate
+  HTTP <-> service calls.
+- Every mutation (create/update/delete/lifecycle transition) must be traceable: emit a
+  domain event so the Audit module can log it, without the emitting module knowing
+  Audit exists.
+- Write TSDoc comments on all public service methods explaining the business rule they
+  enforce (cite the FR-ID from the SRS where applicable).
+- Include unit tests for all pure logic and integration tests (Fastify .inject()) for
+  each new route, using the test database via docker-compose (service "postgres-test").
+- Never leave TODOs unexplained — if something is deferred, state why and where it's
+  tracked.

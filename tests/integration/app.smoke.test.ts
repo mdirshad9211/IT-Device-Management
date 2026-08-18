@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { AppUserRole } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { buildApp } from "../../src/app";
 
 describe("app boilerplate smoke test", () => {
@@ -23,7 +25,6 @@ describe("app boilerplate smoke test", () => {
   });
 
   it.each([
-    "/api/v1/auth",
     "/api/v1/clients",
     "/api/v1/devices",
     "/api/v1/agents",
@@ -31,10 +32,46 @@ describe("app boilerplate smoke test", () => {
     "/api/v1/other-network-devices",
     "/api/v1/notifications",
     "/api/v1/audit-logs",
-    "/api/v1/users",
   ])("module stub at %s responds 200 with a not_yet_implemented status", async (url) => {
     const res = await app.inject({ method: "GET", url });
     expect(res.statusCode).toBe(200);
     expect(res.json().status).toBe("not_yet_implemented");
+  });
+
+  it("POST /api/v1/auth/login rejects an invalid body with VALIDATION_ERROR", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: { email: "not-an-email" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("GET /api/v1/users without a JWT is 401, not a stub payload", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/v1/users" });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error.code).toBe("UNAUTHORIZED");
+    expect(res.json().status).toBeUndefined();
+  });
+
+  it("GET /api/v1/users as EMPLOYEE is 403 (SUPER_ADMIN only)", async () => {
+    const token = app.jwt.sign({ userId: randomUUID(), role: AppUserRole.EMPLOYEE });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/users",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.code).toBe("FORBIDDEN");
+  });
+
+  it("PATCH link-account without a JWT is 401", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/devices/${randomUUID()}/assignments/${randomUUID()}/link-account`,
+      payload: { email: "priya.nair@client.local", linkAs: "employee" },
+    });
+    expect(res.statusCode).toBe(401);
   });
 });

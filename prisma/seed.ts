@@ -7,6 +7,7 @@
  * Run with: npm run seed
  */
 import { PrismaClient, AppUserRole, DeviceStatus } from "@prisma/client";
+import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 
@@ -25,6 +26,9 @@ async function main() {
     },
   });
 
+  // Local-dev password for every seeded AppUser. Replace in any non-dev environment.
+  const seedPasswordHash = await bcrypt.hash("Password123!", 10);
+
   const roleSeed: { email: string; name: string; role: AppUserRole }[] = [
     { email: "super.admin@inventory.local", name: "Super Admin", role: AppUserRole.SUPER_ADMIN },
     { email: "dgn.manager@inventory.local", name: "DGN IT Manager", role: AppUserRole.DGN_IT_MANAGER },
@@ -38,8 +42,8 @@ async function main() {
   for (const u of roleSeed) {
     const created = await prisma.appUser.upsert({
       where: { email: u.email },
-      update: {},
-      create: { email: u.email, name: u.name, role: u.role },
+      update: { passwordHash: seedPasswordHash },
+      create: { email: u.email, name: u.name, role: u.role, passwordHash: seedPasswordHash },
     });
     users[u.role] = created;
   }

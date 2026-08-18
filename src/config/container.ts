@@ -1,21 +1,17 @@
-import { createContainer, asValue, AwilixContainer } from "awilix";
+import { createContainer, asValue, asClass, AwilixContainer } from "awilix";
 import { prisma } from "../shared/kernel/prisma";
 import { domainEventBus } from "../shared/kernel/events";
 import { logger } from "../shared/kernel/logger";
+import { PrismaAuthRepository } from "../modules/auth/auth.repository";
+import { AuthService } from "../modules/auth/auth.service";
+import { AuthController } from "../modules/auth/auth.controller";
+import { PrismaUserManagementRepository } from "../modules/user-management/user-management.repository";
+import { UserManagementService } from "../modules/user-management/user-management.service";
+import { UserManagementController } from "../modules/user-management/user-management.controller";
 
 /**
- * Shared infrastructure singletons only, for now. As each module gets its
- * business logic built out (per the reference Cursor prompts), its
- * service/repository pairs get registered here with asClass(...), e.g.:
- *
- *   container.register({
- *     deviceRepository: asClass(PrismaDeviceRepository).singleton(),
- *     deviceService: asClass(DeviceService).singleton(),
- *   });
- *
- * Controllers resolve what they need via `request.container.resolve(...)`
- * (see the `container` decorator registered in app.ts) rather than importing
- * concrete classes — this is what keeps services swappable/testable.
+ * Shared infrastructure singletons plus module service/repository pairs.
+ * Controllers resolve via `request.container.resolve(...)` (see app.ts).
  */
 export function buildContainer(): AwilixContainer {
   const container = createContainer();
@@ -24,6 +20,14 @@ export function buildContainer(): AwilixContainer {
     prisma: asValue(prisma),
     eventBus: asValue(domainEventBus),
     logger: asValue(logger),
+
+    authRepository: asClass(PrismaAuthRepository).singleton(),
+    authService: asClass(AuthService).singleton(),
+    authController: asClass(AuthController).singleton(),
+
+    userManagementRepository: asClass(PrismaUserManagementRepository).singleton(),
+    userManagementService: asClass(UserManagementService).singleton(),
+    userManagementController: asClass(UserManagementController).singleton(),
   });
 
   return container;

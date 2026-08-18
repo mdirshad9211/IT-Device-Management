@@ -2,15 +2,32 @@ import { EventEmitter2 } from "eventemitter2";
 
 /**
  * Domain event map. Each module extends this as it's implemented (e.g. the
- * Device module adds "device.allotted", "device.discarded", etc.). Kept
- * empty here in the boilerplate phase — do not invent event names ahead of
- * the module that owns them.
+ * Device module adds "device.allotted", "device.discarded", etc.).
  *
  * This is what lets modules stay decoupled: Device never imports Notification
  * or Audit directly. It emits an event; whichever modules care, listen.
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface DomainEvents {}
+export interface DomainEvents {
+  "appUser.created": { actorId: string; userId: string; email: string; role: string };
+  "appUser.updated": {
+    actorId: string;
+    userId: string;
+    changes: {
+      name?: string;
+      email?: string;
+      role?: string;
+      isActive?: boolean;
+      passwordChanged: boolean;
+    };
+  };
+  "deviceAssignment.accountLinked": {
+    actorId: string;
+    deviceId: string;
+    assignmentId: string;
+    linkedUserId: string;
+    linkAs: "employee" | "manager";
+  };
+}
 
 export class DomainEventBus {
   private readonly emitter = new EventEmitter2({ wildcard: false, maxListeners: 50 });

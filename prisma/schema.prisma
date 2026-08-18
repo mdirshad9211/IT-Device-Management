@@ -149,12 +149,13 @@ model SiteLocation {
 }
 
 model AppUser {
-  id        String      @id @default(uuid())
-  name      String
-  email     String      @unique
-  role      AppUserRole
-  isActive  Boolean     @default(true) @map("is_active")
-  createdAt DateTime    @default(now()) @map("created_at")
+  id           String      @id @default(uuid())
+  name         String
+  email        String      @unique
+  passwordHash String      @map("password_hash")
+  role         AppUserRole
+  isActive     Boolean     @default(true) @map("is_active")
+  createdAt    DateTime    @default(now()) @map("created_at")
 
   engineerAssignments EngineerAssignment[]
   lifecycleEvents     DeviceLifecycleEvent[]

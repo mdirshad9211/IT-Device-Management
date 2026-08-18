@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
+import jwt from "@fastify/jwt";
 import { randomUUID } from "node:crypto";
 
 import { logger } from "./shared/kernel/logger";
@@ -8,6 +9,7 @@ import { prisma } from "./shared/kernel/prisma";
 import { redisConnection } from "./shared/kernel/queue";
 import errorHandlerPlugin from "./shared/http/plugins/error-handler";
 import { buildContainer } from "./config/container";
+import { env } from "./config/env";
 
 import authRoutes from "./modules/auth/auth.routes";
 import clientRoutes from "./modules/client/client.routes";
@@ -17,7 +19,9 @@ import qrRoutes from "./modules/qr/qr.routes";
 import otherNetworkDeviceRoutes from "./modules/other-network-device/other-network-device.routes";
 import notificationRoutes from "./modules/notification/notification.routes";
 import auditRoutes from "./modules/audit/audit.routes";
-import userManagementRoutes from "./modules/user-management/user-management.routes";
+import userManagementRoutes, {
+  userManagementAssignmentRoutes,
+} from "./modules/user-management/user-management.routes";
 
 /**
  * Builds (but does not start) a Fastify instance. Exported separately from
@@ -26,13 +30,14 @@ import userManagementRoutes from "./modules/user-management/user-management.rout
  */
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
-    loggerInstance: logger,
+    logger,
     genReqId: () => randomUUID(),
   });
 
   // --- Core plugins ---
   await app.register(cors, { origin: true });
   await app.register(rateLimit, { max: 200, timeWindow: "1 minute" });
+  await app.register(jwt, { secret: env.JWT_SECRET });
   await app.register(errorHandlerPlugin);
 
   // --- DI container, available on every request as request.container ---
@@ -54,7 +59,12 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
 
     try {
-      await redisConnection.ping();
+      await Promise.race([
+        redisConnection.ping(),
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error("redis ping timeout")), 1000);
+        }),
+      ]);
       health.redis = "ok";
     } catch {
       health.redis = "unreachable";
@@ -74,6 +84,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(notificationRoutes, { prefix: "/api/v1/notifications" });
   await app.register(auditRoutes, { prefix: "/api/v1/audit-logs" });
   await app.register(userManagementRoutes, { prefix: "/api/v1/users" });
+  await app.register(userManagementAssignmentRoutes, { prefix: "/api/v1/devices" });
 
-  return app;
+  return app as unknown as FastifyInstance;
 }

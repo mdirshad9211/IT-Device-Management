@@ -11,6 +11,12 @@ import { UserManagementController } from "../modules/user-management/user-manage
 import { PrismaClientRepository } from "../modules/client/client.repository";
 import { ClientService } from "../modules/client/client.service";
 import { ClientController } from "../modules/client/client.controller";
+import { PrismaQrRepository } from "../modules/qr/qr.repository";
+import { QrService } from "../modules/qr/qr.service";
+import { PrismaDeviceRepository } from "../modules/device/device.repository";
+import { DeviceService } from "../modules/device/device.service";
+import { DeviceLifecycleService } from "../modules/device/device.lifecycle.service";
+import { DeviceController } from "../modules/device/device.controller";
 
 /**
  * Shared infrastructure singletons plus module service/repository pairs.
@@ -35,6 +41,14 @@ export function buildContainer(): AwilixContainer {
     clientRepository: asClass(PrismaClientRepository).singleton(),
     clientService: asClass(ClientService).singleton(),
     clientController: asClass(ClientController).singleton(),
+
+    qrRepository: asClass(PrismaQrRepository).singleton(),
+    qrService: asClass(QrService).singleton(),
+
+    deviceRepository: asClass(PrismaDeviceRepository).singleton(),
+    deviceService: asClass(DeviceService).singleton(),
+    deviceLifecycleService: asClass(DeviceLifecycleService).singleton(),
+    deviceController: asClass(DeviceController).singleton(),
   });
 
   return container;

@@ -46,7 +46,38 @@ export interface DomainEvents {
     engineerUserId: string;
     assignmentId: string;
   };
+  "device.allotted": {
+    actorId: string;
+    deviceId: string;
+    clientId: string;
+    assetTag: string;
+    qrValue: string | null;
+  };
+  "device.updated": {
+    actorId: string;
+    deviceId: string;
+    changes: Record<string, { from: unknown; to: unknown }>;
+  };
+  "device.assignment_changed": {
+    actorId: string;
+    deviceId: string;
+    assignmentId: string;
+    previousAssignmentId: string | null;
+  };
+  "device.discarded": DeviceLifecycleEventPayload;
+  "device.reactivated": DeviceLifecycleEventPayload;
+  "device.deleted": DeviceLifecycleEventPayload;
+  "device.retired": DeviceLifecycleEventPayload;
+  "device.scrapped": DeviceLifecycleEventPayload;
 }
+
+export type DeviceLifecycleEventPayload = {
+  actorId: string;
+  deviceId: string;
+  fromStatus: string;
+  toStatus: string;
+  eventType: string;
+};
 
 export class DomainEventBus {
   private readonly emitter = new EventEmitter2({ wildcard: false, maxListeners: 50 });

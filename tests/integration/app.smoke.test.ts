@@ -24,13 +24,18 @@ describe("app boilerplate smoke test", () => {
     expect(body).toHaveProperty("redis");
   });
 
-  it.each([
-    "/api/v1/notifications",
-    "/api/v1/audit-logs",
-  ])("module stub at %s responds 200 with a not_yet_implemented status", async (url) => {
-    const res = await app.inject({ method: "GET", url });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe("not_yet_implemented");
+  it("GET /api/v1/notifications without a JWT is 401, not a stub payload", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/v1/notifications" });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error.code).toBe("UNAUTHORIZED");
+    expect(res.json().status).toBeUndefined();
+  });
+
+  it("GET /api/v1/audit-logs without a JWT is 401, not a stub payload", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/v1/audit-logs" });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error.code).toBe("UNAUTHORIZED");
+    expect(res.json().status).toBeUndefined();
   });
 
   it("POST /api/v1/auth/login rejects an invalid body with VALIDATION_ERROR", async () => {

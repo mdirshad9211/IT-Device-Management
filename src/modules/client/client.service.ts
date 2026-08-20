@@ -1,4 +1,4 @@
-import { AppUserRole, Prisma } from "@prisma/client";
+import { AppUserRole, AuditAction, Prisma } from "@prisma/client";
 import { ConflictError, NotFoundError, ValidationError } from "../../shared/kernel/errors";
 import type { DomainEventBus } from "../../shared/kernel/events";
 import { UNSCOPED_ROLES } from "../../shared/kernel/rbac";
@@ -23,8 +23,12 @@ export class ClientService {
         currentLocation: input.currentLocation,
       });
       this.eventBus.emit("client.created", {
-        actorId: actorUserId,
-        clientId: client.id,
+        entityType: "Client",
+        entityId: client.id,
+        action: AuditAction.CREATE,
+        performedBy: actorUserId,
+        before: null,
+        after: { id: client.id, name: client.name, currentLocation: client.currentLocation },
         name: client.name,
       });
       return client;
@@ -70,8 +74,12 @@ export class ClientService {
     const previousLocation = existing.currentLocation;
     const client = await this.clientRepository.changeLocation(clientId, input.currentLocation);
     this.eventBus.emit("client.location_changed", {
-      actorId: actorUserId,
-      clientId,
+      entityType: "Client",
+      entityId: clientId,
+      action: AuditAction.UPDATE,
+      performedBy: actorUserId,
+      before: { currentLocation: previousLocation },
+      after: { currentLocation: input.currentLocation },
       previousLocation,
       newLocation: input.currentLocation,
     });
@@ -106,8 +114,12 @@ export class ClientService {
 
     const assignment = await this.clientRepository.createEngineerAssignment(clientId, input.userId);
     this.eventBus.emit("client.engineer.assigned", {
-      actorId: actorUserId,
-      clientId,
+      entityType: "EngineerAssignment",
+      entityId: assignment.id,
+      action: AuditAction.CREATE,
+      performedBy: actorUserId,
+      before: null,
+      after: { id: assignment.id, clientId, engineerUserId: input.userId },
       engineerUserId: input.userId,
       assignmentId: assignment.id,
     });
@@ -131,8 +143,12 @@ export class ClientService {
 
     const closed = await this.clientRepository.offboardEngineerAssignment(assignment.id, new Date());
     this.eventBus.emit("client.engineer.offboarded", {
-      actorId: actorUserId,
-      clientId,
+      entityType: "EngineerAssignment",
+      entityId: closed.id,
+      action: AuditAction.UPDATE,
+      performedBy: actorUserId,
+      before: { isActive: true },
+      after: { isActive: false, unassignedAt: closed.unassignedAt },
       engineerUserId,
       assignmentId: closed.id,
     });

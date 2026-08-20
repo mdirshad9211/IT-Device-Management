@@ -27,6 +27,7 @@ export const deviceSelect = {
   status: true,
   discardedAt: true,
   deletionDueAt: true,
+  discardWarningSentAt: true,
   retiredFlag: true,
   createdAt: true,
   updatedAt: true,
@@ -74,6 +75,7 @@ export type DeviceRecord = Pick<
   | "status"
   | "discardedAt"
   | "deletionDueAt"
+  | "discardWarningSentAt"
   | "retiredFlag"
   | "createdAt"
   | "updatedAt"
@@ -140,6 +142,18 @@ export type DeviceUpdateData = {
   installedSoftware?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
 };
 
+/** Minimal row for the lifecycle sweep (delete + discard warning). */
+export type SweepDeviceRow = {
+  id: string;
+  clientId: string;
+  assetTag: string;
+  status: DeviceStatus;
+  deletionDueAt: Date | null;
+  discardWarningSentAt: Date | null;
+  userEmail: string | null;
+  managerEmail: string | null;
+};
+
 function toDetail(row: DeviceRecord & { qrCode: QrRecord | null; assignments: AssignmentRecord[] }): DeviceDetail {
   return {
     ...pickDevice(row),
@@ -164,6 +178,7 @@ function pickDevice(row: DeviceRecord): DeviceRecord {
     status: row.status,
     discardedAt: row.discardedAt,
     deletionDueAt: row.deletionDueAt,
+    discardWarningSentAt: row.discardWarningSentAt,
     retiredFlag: row.retiredFlag,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -198,6 +213,20 @@ export interface DeviceRepository {
     skip: number,
     take: number,
   ): Promise<{ items: DeviceHardwareChangeEvent[]; total: number }>;
+  /** DISCARDED devices with deletionDueAt <= now (hard-delete candidates). */
+  listDueForHardDelete(now: Date): Promise<SweepDeviceRow[]>;
+  /**
+   * DISCARDED devices whose deletionDueAt falls within (now, now+warnWithinDays]
+   * and that have not yet been warned (`discardWarningSentAt` is null).
+   */
+  listDueForDiscardWarning(now: Date, warnWithinDays: number): Promise<SweepDeviceRow[]>;
+  /**
+   * Atomically sets discardWarningSentAt when still null. Returns true if this
+   * caller won the race (idempotent warn).
+   */
+  claimDiscardWarning(deviceId: string, sentAt: Date): Promise<boolean>;
+  /** Permanently removes a device and dependent rows (FK-safe order). */
+  hardDeleteDevice(deviceId: string): Promise<void>;
 }
 
 export class PrismaDeviceRepository implements DeviceRepository {
@@ -331,6 +360,9 @@ export class PrismaDeviceRepository implements DeviceRepository {
           discardedAt: plan.discardedAt,
           deletionDueAt: plan.deletionDueAt,
           retiredFlag: plan.retiredFlag,
+          ...(plan.discardWarningSentAt !== undefined
+            ? { discardWarningSentAt: plan.discardWarningSentAt }
+            : {}),
         },
       });
       await tx.deviceLifecycleEvent.create({
@@ -441,6 +473,87 @@ export class PrismaDeviceRepository implements DeviceRepository {
     return { items, total };
   }
 
+  async listDueForHardDelete(now: Date): Promise<SweepDeviceRow[]> {
+    const rows = await this.prisma.device.findMany({
+      where: {
+        status: DeviceStatus.DISCARDED,
+        deletionDueAt: { lte: now },
+      },
+      select: {
+        id: true,
+        clientId: true,
+        assetTag: true,
+        status: true,
+        deletionDueAt: true,
+        discardWarningSentAt: true,
+        assignments: {
+          where: { isCurrent: true },
+          select: { userEmail: true, managerEmail: true },
+          take: 1,
+        },
+      },
+    });
+    return rows.map(toSweepRow);
+  }
+
+  async listDueForDiscardWarning(now: Date, warnWithinDays: number): Promise<SweepDeviceRow[]> {
+    const warnUntil = new Date(now.getTime());
+    warnUntil.setUTCDate(warnUntil.getUTCDate() + warnWithinDays);
+    const rows = await this.prisma.device.findMany({
+      where: {
+        status: DeviceStatus.DISCARDED,
+        discardWarningSentAt: null,
+        deletionDueAt: { gt: now, lte: warnUntil },
+      },
+      select: {
+        id: true,
+        clientId: true,
+        assetTag: true,
+        status: true,
+        deletionDueAt: true,
+        discardWarningSentAt: true,
+        assignments: {
+          where: { isCurrent: true },
+          select: { userEmail: true, managerEmail: true },
+          take: 1,
+        },
+      },
+    });
+    return rows.map(toSweepRow);
+  }
+
+  async claimDiscardWarning(deviceId: string, sentAt: Date): Promise<boolean> {
+    const result = await this.prisma.device.updateMany({
+      where: { id: deviceId, discardWarningSentAt: null, status: DeviceStatus.DISCARDED },
+      data: { discardWarningSentAt: sentAt },
+    });
+    return result.count === 1;
+  }
+
+  async hardDeleteDevice(deviceId: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.notification.updateMany({ where: { deviceId }, data: { deviceId: null } });
+      await tx.otherNetworkDevice.updateMany({
+        where: { attachedDeviceId: deviceId },
+        data: { attachedDeviceId: null },
+      });
+
+      await tx.deviceSoftwareEvent.deleteMany({ where: { deviceId } });
+      await tx.deviceHardwareChangeEvent.deleteMany({ where: { deviceId } });
+      await tx.deviceLifecycleEvent.deleteMany({ where: { deviceId } });
+      await tx.deviceAssignment.deleteMany({ where: { deviceId } });
+      await tx.qrCode.deleteMany({ where: { deviceId } });
+
+      const agent = await tx.agent.findUnique({ where: { deviceId }, select: { id: true } });
+      if (agent) {
+        await tx.agentPollLog.deleteMany({ where: { agentId: agent.id } });
+        await tx.agent.delete({ where: { id: agent.id } });
+      }
+
+      await tx.device.delete({ where: { id: deviceId } });
+    });
+  }
+
   private toWhere(filter: DeviceListFilter): Prisma.DeviceWhereInput {
     const where: Prisma.DeviceWhereInput = {};
     if (filter.clientIds) {
@@ -462,4 +575,26 @@ export class PrismaDeviceRepository implements DeviceRepository {
     }
     return where;
   }
+}
+
+function toSweepRow(row: {
+  id: string;
+  clientId: string;
+  assetTag: string;
+  status: DeviceStatus;
+  deletionDueAt: Date | null;
+  discardWarningSentAt: Date | null;
+  assignments: Array<{ userEmail: string; managerEmail: string }>;
+}): SweepDeviceRow {
+  const assignment = row.assignments[0];
+  return {
+    id: row.id,
+    clientId: row.clientId,
+    assetTag: row.assetTag,
+    status: row.status,
+    deletionDueAt: row.deletionDueAt,
+    discardWarningSentAt: row.discardWarningSentAt,
+    userEmail: assignment?.userEmail ?? null,
+    managerEmail: assignment?.managerEmail ?? null,
+  };
 }

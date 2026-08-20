@@ -1,4 +1,4 @@
-import { AppUserRole, Prisma } from "@prisma/client";
+import { AppUserRole, AuditAction, Prisma } from "@prisma/client";
 import { ConflictError, NotFoundError } from "../../shared/kernel/errors";
 import type { DomainEventBus } from "../../shared/kernel/events";
 import { enforceAccess, UNSCOPED_ROLES, type RbacAction } from "../../shared/kernel/rbac";
@@ -42,11 +42,24 @@ export class DeviceService {
         this.qrService.generateQrForDevice(deviceId, tx),
       );
       this.eventBus.emit("device.allotted", {
-        actorId: actor.userId,
-        deviceId: device.id,
+        entityType: "Device",
+        entityId: device.id,
+        action: AuditAction.CREATE,
+        performedBy: actor.userId,
+        before: null,
+        after: {
+          id: device.id,
+          clientId: device.clientId,
+          assetTag: device.assetTag,
+          status: device.status,
+        },
         clientId: device.clientId,
         assetTag: device.assetTag,
         qrValue: device.qrCode?.qrValue ?? null,
+        recipients: uniqueEmails([
+          device.currentAssignment?.userEmail,
+          device.currentAssignment?.managerEmail,
+        ]),
       });
       return this.withLinkedDevices(device);
     } catch (error) {
@@ -106,8 +119,12 @@ export class DeviceService {
     const updated = await this.deviceRepository.update(id, toUpdateData(input));
     const changes = diffShallow(inventorySnapshot(existing), inventorySnapshot(updated));
     this.eventBus.emit("device.updated", {
-      actorId: actor.userId,
-      deviceId: id,
+      entityType: "Device",
+      entityId: id,
+      action: AuditAction.UPDATE,
+      performedBy: actor.userId,
+      before: inventorySnapshot(existing),
+      after: inventorySnapshot(updated),
       changes,
     });
     return this.withLinkedDevices(updated);
@@ -122,8 +139,14 @@ export class DeviceService {
     await this.assertDeviceAccess(device, actor, "edit");
     const assignment = await this.deviceRepository.changeAssignment(deviceId, input);
     this.eventBus.emit("device.assignment_changed", {
-      actorId: actor.userId,
-      deviceId,
+      entityType: "DeviceAssignment",
+      entityId: assignment.id,
+      action: AuditAction.UPDATE,
+      performedBy: actor.userId,
+      before: device.currentAssignment
+        ? { id: device.currentAssignment.id, isCurrent: true }
+        : null,
+      after: { id: assignment.id, isCurrent: true },
       assignmentId: assignment.id,
       previousAssignmentId: device.currentAssignment?.id ?? null,
     });
@@ -240,6 +263,18 @@ function inventorySnapshot(device: DeviceDetail): Record<string, unknown> {
     connectedDevices: device.connectedDevices,
     installedSoftware: device.installedSoftware,
   };
+}
+
+function uniqueEmails(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const email = value?.trim().toLowerCase();
+    if (!email || seen.has(email)) continue;
+    seen.add(email);
+    out.push(email);
+  }
+  return out;
 }
 
 function toAllotmentData(input: AllotDeviceBody) {

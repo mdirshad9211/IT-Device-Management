@@ -202,6 +202,8 @@ model Device {
   status        DeviceStatus @default(ACTIVE)
   discardedAt   DateTime?    @map("discarded_at")
   deletionDueAt DateTime?    @map("deletion_due_at")
+  /// Set when lifecycle sweep emits device.discard.warning (idempotency; cleared on REACTIVATE).
+  discardWarningSentAt DateTime? @map("discard_warning_sent_at")
   retiredFlag   Boolean      @default(false) @map("retired_flag")
 
   createdAt DateTime @default(now()) @map("created_at")

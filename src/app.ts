@@ -42,6 +42,10 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // --- DI container, available on every request as request.container ---
   const container = buildContainer();
+  // Subscribe Audit + Notification listeners once per app instance.
+  container.resolve("auditListener");
+  container.resolve("notificationListener");
+  app.decorate("diContainer", container);
   app.decorateRequest("container", null);
   app.addHook("onRequest", async (request) => {
     request.container = container;
@@ -79,7 +83,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     reply.status(isHealthy ? 200 : 503).send(health);
   });
 
-  // --- Module routes (all stubs for now — see each module's routes file) ---
+  // --- Module routes ---
   await app.register(authRoutes, { prefix: "/api/v1/auth" });
   await app.register(clientRoutes, { prefix: "/api/v1/clients" });
   await app.register(agentDeviceRoutes, { prefix: "/api/v1/devices" });

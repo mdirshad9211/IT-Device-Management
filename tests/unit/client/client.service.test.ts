@@ -78,7 +78,11 @@ describe("ClientService.changeLocation", () => {
     await service.changeLocation("c1", { currentLocation: "CRL Mumbai" }, "admin-1");
     expect(eventBus.emit).toHaveBeenCalledWith(
       "client.location_changed",
-      expect.objectContaining({ clientId: "c1", previousLocation: "CRL Delhi", newLocation: "CRL Mumbai" }),
+      expect.objectContaining({
+        entityId: "c1",
+        previousLocation: "CRL Delhi",
+        newLocation: "CRL Mumbai",
+      }),
     );
   });
 });

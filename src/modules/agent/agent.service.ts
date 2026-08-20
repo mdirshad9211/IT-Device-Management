@@ -1,9 +1,8 @@
 import bcrypt from "bcrypt";
-import { PollStatus, Prisma } from "@prisma/client";
+import { AppUserRole, AuditAction, PollStatus, Prisma } from "@prisma/client";
 import { ForbiddenError, NotFoundError, UnauthorizedError } from "../../shared/kernel/errors";
 import type { DomainEventBus } from "../../shared/kernel/events";
 import { enforceAccess } from "../../shared/kernel/rbac";
-import { AppUserRole } from "@prisma/client";
 import { env } from "../../config/env";
 import {
   classifyPollStatus,
@@ -61,18 +60,30 @@ export class AgentService {
     });
 
     this.eventBus.emit("agent.polled", {
+      entityType: "Agent",
+      entityId: agentId,
+      action: AuditAction.UPDATE,
+      performedBy: null,
+      before: null,
+      after: { pollLogId, status, deviceId: device.id },
       agentId,
-      deviceId: device.id,
       pollLogId,
       status,
     });
 
     if (!failed && payload.storageUsedPercent !== undefined && payload.storageUsedPercent >= STORAGE_THRESHOLD_PERCENT) {
+      const recipients = await this.agentRepository.listDeviceContactEmails(device.id);
       this.eventBus.emit("device.storage.threshold_breached", {
-        deviceId: device.id,
+        entityType: "Device",
+        entityId: device.id,
+        action: AuditAction.UPDATE,
+        performedBy: null,
+        before: { storageUsedPercent: device.storageUsedPercent },
+        after: { storageUsedPercent: payload.storageUsedPercent },
         clientId: device.clientId,
         agentId,
         storageUsedPercent: payload.storageUsedPercent,
+        recipients,
       });
     }
 
@@ -112,7 +123,12 @@ export class AgentService {
 
     const { token, expiresAt } = signAgentDownloadToken(clientId);
     this.eventBus.emit("agent.download_token.issued", {
-      actorId: actor.userId,
+      entityType: "Client",
+      entityId: clientId,
+      action: AuditAction.UPDATE,
+      performedBy: actor.userId,
+      before: null,
+      after: { downloadTokenIssued: true, expiresAt: expiresAt.toISOString() },
       clientId,
     });
     return {
@@ -142,8 +158,13 @@ export class AgentService {
 
     await this.agentRepository.deregister(agentId);
     this.eventBus.emit("agent.deregistered", {
+      entityType: "Agent",
+      entityId: agentId,
+      action: AuditAction.DELETE,
+      performedBy: null,
+      before: { id: agent.id, deviceId: agent.deviceId, clientId: agent.clientId },
+      after: null,
       agentId,
-      deviceId: agent.deviceId,
       clientId: agent.clientId,
     });
     return { agentId, deregistered: true as const };

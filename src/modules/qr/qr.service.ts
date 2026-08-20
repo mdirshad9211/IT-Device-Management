@@ -1,5 +1,5 @@
 import QRCode from "qrcode";
-import { Prisma } from "@prisma/client";
+import { AuditAction, Prisma } from "@prisma/client";
 import { ConflictError, NotFoundError } from "../../shared/kernel/errors";
 import type { DomainEventBus } from "../../shared/kernel/events";
 import { env } from "../../config/env";
@@ -31,7 +31,12 @@ export class QrService {
     try {
       const qr = await this.qrRepository.createForDevice(deviceId, `INV:${device.assetTag}`, tx);
       this.eventBus.emit("qr.generated", {
-        deviceId,
+        entityType: "QrCode",
+        entityId: qr.id,
+        action: AuditAction.CREATE,
+        performedBy: null,
+        before: null,
+        after: { deviceId, qrValue: qr.qrValue },
         qrValue: qr.qrValue,
       });
       return qr;
@@ -55,7 +60,12 @@ export class QrService {
 
     const updated = await this.qrRepository.incrementPrintCount(deviceId);
     this.eventBus.emit("qr.printed", {
-      deviceId,
+      entityType: "QrCode",
+      entityId: updated.id,
+      action: AuditAction.UPDATE,
+      performedBy: null,
+      before: { printCount: updated.printCount - 1 },
+      after: { printCount: updated.printCount },
       qrValue: updated.qrValue,
       printCount: updated.printCount,
     });
@@ -158,8 +168,12 @@ export class QrService {
 
     const requestedAt = new Date();
     this.eventBus.emit("agent.poll.requested", {
-      actorId: actorUserId,
-      deviceId,
+      entityType: "Agent",
+      entityId: agent.id,
+      action: AuditAction.UPDATE,
+      performedBy: actorUserId,
+      before: null,
+      after: { deviceId, requestedAt: requestedAt.toISOString(), source: "qr" },
       agentId: agent.id,
       source: "qr",
       requestedAt: requestedAt.toISOString(),

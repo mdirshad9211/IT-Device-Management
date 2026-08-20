@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { AppUserRole, DeviceStatus } from "@prisma/client";
 import { buildApp } from "../../src/app";
 import { prisma } from "../../src/shared/kernel/prisma";
-import { domainEventBus } from "../../src/shared/kernel/events";
+import type { DomainEventBus } from "../../src/shared/kernel/events";
 import { hashAgentApiKey } from "../../src/modules/auth/agent-api-key";
 import { createTestUser, resetClientTestData, uniqueName } from "./helpers/client-fixtures";
 
@@ -90,7 +90,8 @@ describe("agent module (postgres-test)", () => {
   });
 
   it("storage breach at exactly 80% triggers device.storage.threshold_breached", async () => {
-    const emit = vi.spyOn(domainEventBus, "emit");
+    const eventBus = app.diContainer.resolve<DomainEventBus>("eventBus");
+    const emit = vi.spyOn(eventBus, "emit");
     const res = await app.inject({
       method: "POST",
       url: `/api/v1/agents/${agentId}/poll`,
@@ -106,7 +107,7 @@ describe("agent module (postgres-test)", () => {
 
     expect(emit).toHaveBeenCalledWith(
       "device.storage.threshold_breached",
-      expect.objectContaining({ deviceId, agentId, storageUsedPercent: 80 }),
+      expect.objectContaining({ entityId: deviceId, agentId, storageUsedPercent: 80 }),
     );
     emit.mockRestore();
   });

@@ -110,6 +110,7 @@ export const deviceSchema = z.object({
   status: z.nativeEnum(DeviceStatus),
   discardedAt: z.coerce.date().nullable(),
   deletionDueAt: z.coerce.date().nullable(),
+  discardWarningSentAt: z.coerce.date().nullable(),
   retiredFlag: z.boolean(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),

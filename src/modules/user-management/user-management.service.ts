@@ -1,6 +1,5 @@
 import bcrypt from "bcrypt";
-import { Prisma } from "@prisma/client";
-import { AppUserRole } from "@prisma/client";
+import { AppUserRole, AuditAction, Prisma } from "@prisma/client";
 import { ConflictError, NotFoundError, ValidationError } from "../../shared/kernel/errors";
 import type { DomainEventBus } from "../../shared/kernel/events";
 import { toSkipTake } from "../../shared/http/schemas/pagination";
@@ -40,8 +39,12 @@ export class UserManagementService {
         isActive: input.isActive,
       });
       this.eventBus.emit("appUser.created", {
-        actorId: actorUserId,
-        userId: user.id,
+        entityType: "AppUser",
+        entityId: user.id,
+        action: AuditAction.CREATE,
+        performedBy: actorUserId,
+        before: null,
+        after: { id: user.id, email: user.email, role: user.role, isActive: user.isActive },
         email: user.email,
         role: user.role,
       });
@@ -79,8 +82,23 @@ export class UserManagementService {
     try {
       const user = await this.userManagementRepository.update(id, data);
       this.eventBus.emit("appUser.updated", {
-        actorId: actorUserId,
-        userId: user.id,
+        entityType: "AppUser",
+        entityId: user.id,
+        action: AuditAction.UPDATE,
+        performedBy: actorUserId,
+        before: {
+          name: existing.name,
+          email: existing.email,
+          role: existing.role,
+          isActive: existing.isActive,
+        },
+        after: {
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive,
+          passwordChanged: input.password !== undefined,
+        },
         changes: {
           name: input.name,
           email: input.email,
@@ -128,9 +146,21 @@ export class UserManagementService {
     const updated = await this.userManagementRepository.linkAssignmentAccount(assignment.id, patch);
 
     this.eventBus.emit("deviceAssignment.accountLinked", {
-      actorId: actorUserId,
+      entityType: "DeviceAssignment",
+      entityId: updated.id,
+      action: AuditAction.UPDATE,
+      performedBy: actorUserId,
+      before: {
+        employeeUserId: assignment.employeeUserId,
+        managerUserId: assignment.managerUserId,
+      },
+      after: {
+        employeeUserId: updated.employeeUserId,
+        managerUserId: updated.managerUserId,
+        linkAs: input.linkAs,
+        linkedUserId: user.id,
+      },
       deviceId,
-      assignmentId: updated.id,
       linkedUserId: user.id,
       linkAs: input.linkAs,
     });

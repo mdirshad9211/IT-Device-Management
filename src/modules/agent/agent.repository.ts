@@ -23,6 +23,7 @@ export interface AgentRepository {
   findDeviceTelemetry(deviceId: string): Promise<(DeviceTelemetry & { id: string; clientId: string }) | null>;
   clientExists(clientId: string): Promise<boolean>;
   listActiveAssignedClientIds(appUserId: string): Promise<string[]>;
+  listDeviceContactEmails(deviceId: string): Promise<string[]>;
   commitPoll(input: PollCommitInput): Promise<{ pollLogId: string }>;
   deregister(agentId: string): Promise<void>;
 }
@@ -66,6 +67,23 @@ export class PrismaAgentRepository implements AgentRepository {
       select: { clientId: true },
     });
     return rows.map((row) => row.clientId);
+  }
+
+  async listDeviceContactEmails(deviceId: string): Promise<string[]> {
+    const assignment = await this.prisma.deviceAssignment.findFirst({
+      where: { deviceId, isCurrent: true },
+      select: { userEmail: true, managerEmail: true },
+    });
+    if (!assignment) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const value of [assignment.userEmail, assignment.managerEmail]) {
+      const email = value.trim().toLowerCase();
+      if (!email || seen.has(email)) continue;
+      seen.add(email);
+      out.push(email);
+    }
+    return out;
   }
 
   /**

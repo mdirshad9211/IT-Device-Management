@@ -175,7 +175,7 @@ export interface DeviceRepository {
   listActiveAssignedClientIds(appUserId: string): Promise<string[]>;
   allot(
     data: AllotmentData,
-    generateQr: (tx: Prisma.TransactionClient, deviceId: string, assetTag: string) => Promise<unknown>,
+    generateQr: (tx: Prisma.TransactionClient, deviceId: string) => Promise<unknown>,
   ): Promise<DeviceDetail>;
   list(skip: number, take: number, filter: DeviceListFilter): Promise<{ items: DeviceDetail[]; total: number }>;
   findById(id: string): Promise<DeviceDetail | null>;
@@ -222,7 +222,7 @@ export class PrismaDeviceRepository implements DeviceRepository {
    */
   async allot(
     data: AllotmentData,
-    generateQr: (tx: Prisma.TransactionClient, deviceId: string, assetTag: string) => Promise<unknown>,
+    generateQr: (tx: Prisma.TransactionClient, deviceId: string) => Promise<unknown>,
   ): Promise<DeviceDetail> {
     return this.prisma.$transaction(async (tx) => {
       const device = await tx.device.create({
@@ -243,7 +243,7 @@ export class PrismaDeviceRepository implements DeviceRepository {
         },
         select: { id: true, assetTag: true },
       });
-      await generateQr(tx, device.id, device.assetTag);
+      await generateQr(tx, device.id);
       const full = await tx.device.findUniqueOrThrow({
         where: { id: device.id },
         select: { ...deviceSelect, qrCode: { select: qrSelect }, assignments: { where: { isCurrent: true }, select: assignmentSelect, take: 1 } },

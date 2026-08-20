@@ -15,6 +15,9 @@ const envSchema = z.object({
   AGENT_JWT_SECRET: z.string().min(16, "AGENT_JWT_SECRET must be at least 16 characters"),
   ADMIN_SECRET_PASSWORD_HASH: z.string().min(1, "ADMIN_SECRET_PASSWORD_HASH is required"),
 
+  /** Max age of Agent.lastPollAt before QR resolve returns a stale_warning (default 24h). */
+  QR_STALE_POLL_THRESHOLD_MS: z.coerce.number().int().positive().default(24 * 60 * 60 * 1000),
+
   SMTP_HOST: z.string().optional().default(""),
   SMTP_PORT: z.coerce.number().int().positive().optional().default(587),
   SMTP_USER: z.string().optional().default(""),

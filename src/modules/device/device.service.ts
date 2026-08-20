@@ -31,8 +31,8 @@ export class DeviceService {
     }
 
     try {
-      const device = await this.deviceRepository.allot(toAllotmentData(input), (tx, deviceId, assetTag) =>
-        this.qrService.generateQrForDevice(tx, deviceId, assetTag),
+      const device = await this.deviceRepository.allot(toAllotmentData(input), (tx, deviceId) =>
+        this.qrService.generateQrForDevice(deviceId, tx),
       );
       this.eventBus.emit("device.allotted", {
         actorId: actor.userId,

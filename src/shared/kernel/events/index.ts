@@ -90,6 +90,22 @@ export interface DomainEvents {
     actorId: string;
     clientId: string;
   };
+  "qr.generated": {
+    deviceId: string;
+    qrValue: string;
+  };
+  "qr.printed": {
+    deviceId: string;
+    qrValue: string;
+    printCount: number;
+  };
+  "agent.poll.requested": {
+    actorId: string;
+    deviceId: string;
+    agentId: string;
+    source: "qr";
+    requestedAt: string;
+  };
 }
 
 export type DeviceLifecycleEventPayload = {

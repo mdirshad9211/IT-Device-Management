@@ -25,7 +25,6 @@ describe("app boilerplate smoke test", () => {
   });
 
   it.each([
-    "/api/v1/qr",
     "/api/v1/other-network-devices",
     "/api/v1/notifications",
     "/api/v1/audit-logs",
@@ -85,6 +84,13 @@ describe("app boilerplate smoke test", () => {
     });
     expect(res.statusCode).toBe(401);
     expect(res.json().error.code).toBe("UNAUTHORIZED");
+  });
+
+  it("GET /api/v1/qr/:deviceId/image without a JWT is 401, not a stub payload", async () => {
+    const res = await app.inject({ method: "GET", url: `/api/v1/qr/${randomUUID()}/image` });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error.code).toBe("UNAUTHORIZED");
+    expect(res.json().status).toBeUndefined();
   });
 
   it("POST /api/v1/clients as IT_ENGINEER is 403 (Client edit is staff-only)", async () => {

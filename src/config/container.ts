@@ -13,6 +13,7 @@ import { ClientService } from "../modules/client/client.service";
 import { ClientController } from "../modules/client/client.controller";
 import { PrismaQrRepository } from "../modules/qr/qr.repository";
 import { QrService } from "../modules/qr/qr.service";
+import { QrController } from "../modules/qr/qr.controller";
 import { PrismaDeviceRepository } from "../modules/device/device.repository";
 import { DeviceService } from "../modules/device/device.service";
 import { DeviceLifecycleService } from "../modules/device/device.lifecycle.service";
@@ -47,6 +48,7 @@ export function buildContainer(): AwilixContainer {
 
     qrRepository: asClass(PrismaQrRepository).singleton(),
     qrService: asClass(QrService).singleton(),
+    qrController: asClass(QrController).singleton(),
 
     deviceRepository: asClass(PrismaDeviceRepository).singleton(),
     deviceService: asClass(DeviceService).singleton(),

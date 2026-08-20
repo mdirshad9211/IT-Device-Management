@@ -7,14 +7,21 @@ import { diffShallow } from "./device.audit-diff";
 import type { DeviceDetail, DeviceListFilter, DeviceRepository, DeviceUpdateData } from "./device.repository";
 import type { AllotDeviceBody, AssignmentInput, UpdateDeviceBody } from "./device.schemas";
 import type { QrService } from "../qr/qr.service";
+import type { OtherNetworkDeviceService } from "../other-network-device/other-network-device.service";
+import type { OtherNetworkDeviceSummary } from "../other-network-device/other-network-device.schemas";
 import { DeviceStatus } from "@prisma/client";
 
 export type Actor = { userId: string; role: AppUserRole };
+
+export type DeviceDetailWithLinks = DeviceDetail & {
+  linkedOtherNetworkDevices: OtherNetworkDeviceSummary[];
+};
 
 export class DeviceService {
   constructor(
     private readonly deviceRepository: DeviceRepository,
     private readonly qrService: QrService,
+    private readonly otherNetworkDeviceService: OtherNetworkDeviceService,
     private readonly eventBus: DomainEventBus,
   ) {}
 
@@ -22,7 +29,7 @@ export class DeviceService {
    * SRS §3.2 allotment form — creates Device + current DeviceAssignment + QR
    * in one transaction. Accounts are never auto-created (free-text only).
    */
-  async allotDevice(input: AllotDeviceBody, actor: Actor): Promise<DeviceDetail> {
+  async allotDevice(input: AllotDeviceBody, actor: Actor): Promise<DeviceDetailWithLinks> {
     await this.assertClientWritable(input.clientId, actor);
 
     const exists = await this.deviceRepository.clientExists(input.clientId);
@@ -41,7 +48,7 @@ export class DeviceService {
         assetTag: device.assetTag,
         qrValue: device.qrCode?.qrValue ?? null,
       });
-      return device;
+      return this.withLinkedDevices(device);
     } catch (error) {
       throw mapUniqueAssetTag(error);
     }
@@ -58,13 +65,24 @@ export class DeviceService {
     const { skip, take } = toSkipTake(query);
     const filter = await this.listFilter(actor, query.clientId, query.status);
     const { items, total } = await this.deviceRepository.list(skip, take, filter);
-    return { items, page: query.page, pageSize: query.pageSize, total };
+    const linked = await this.otherNetworkDeviceService.listLinkedSummariesForDevices(
+      items.map((item) => item.id),
+    );
+    return {
+      items: items.map((item) => ({
+        ...item,
+        linkedOtherNetworkDevices: linked.get(item.id) ?? [],
+      })),
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+    };
   }
 
-  async getDevice(id: string, actor: Actor): Promise<DeviceDetail> {
+  async getDevice(id: string, actor: Actor): Promise<DeviceDetailWithLinks> {
     const device = await this.requireDevice(id);
     await this.assertDeviceAccess(device, actor, "view");
-    return device;
+    return this.withLinkedDevices(device);
   }
 
   /**
@@ -81,7 +99,7 @@ export class DeviceService {
    * PATCH inventory attributes. Emits `device.updated` with a before/after diff
    * for Audit. Does not change assignment, QR, or lifecycle status.
    */
-  async updateDevice(id: string, input: UpdateDeviceBody, actor: Actor): Promise<DeviceDetail> {
+  async updateDevice(id: string, input: UpdateDeviceBody, actor: Actor): Promise<DeviceDetailWithLinks> {
     const existing = await this.requireDevice(id);
     await this.assertDeviceAccess(existing, actor, "edit");
 
@@ -92,7 +110,7 @@ export class DeviceService {
       deviceId: id,
       changes,
     });
-    return updated;
+    return this.withLinkedDevices(updated);
   }
 
   /**
@@ -166,6 +184,12 @@ export class DeviceService {
       activeAssignedClientIds,
       currentAssignment: device.currentAssignment,
     });
+  }
+
+  private async withLinkedDevices(device: DeviceDetail): Promise<DeviceDetailWithLinks> {
+    const linkedOtherNetworkDevices =
+      await this.otherNetworkDeviceService.listLinkedSummariesForDevice(device.id);
+    return { ...device, linkedOtherNetworkDevices };
   }
 
   private assertStaffEdit(actor: Actor): void {

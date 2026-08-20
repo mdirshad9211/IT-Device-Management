@@ -21,6 +21,9 @@ import { DeviceController } from "../modules/device/device.controller";
 import { PrismaAgentRepository } from "../modules/agent/agent.repository";
 import { AgentService } from "../modules/agent/agent.service";
 import { AgentController } from "../modules/agent/agent.controller";
+import { PrismaOtherNetworkDeviceRepository } from "../modules/other-network-device/other-network-device.repository";
+import { OtherNetworkDeviceService } from "../modules/other-network-device/other-network-device.service";
+import { OtherNetworkDeviceController } from "../modules/other-network-device/other-network-device.controller";
 
 /**
  * Shared infrastructure singletons plus module service/repository pairs.
@@ -49,6 +52,10 @@ export function buildContainer(): AwilixContainer {
     qrRepository: asClass(PrismaQrRepository).singleton(),
     qrService: asClass(QrService).singleton(),
     qrController: asClass(QrController).singleton(),
+
+    otherNetworkDeviceRepository: asClass(PrismaOtherNetworkDeviceRepository).singleton(),
+    otherNetworkDeviceService: asClass(OtherNetworkDeviceService).singleton(),
+    otherNetworkDeviceController: asClass(OtherNetworkDeviceController).singleton(),
 
     deviceRepository: asClass(PrismaDeviceRepository).singleton(),
     deviceService: asClass(DeviceService).singleton(),

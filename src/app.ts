@@ -14,7 +14,7 @@ import { env } from "./config/env";
 import authRoutes from "./modules/auth/auth.routes";
 import clientRoutes from "./modules/client/client.routes";
 import deviceRoutes from "./modules/device/device.routes";
-import agentRoutes from "./modules/agent/agent.routes";
+import agentRoutes, { agentDeviceRoutes } from "./modules/agent/agent.routes";
 import qrRoutes from "./modules/qr/qr.routes";
 import otherNetworkDeviceRoutes from "./modules/other-network-device/other-network-device.routes";
 import notificationRoutes from "./modules/notification/notification.routes";
@@ -82,6 +82,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   // --- Module routes (all stubs for now — see each module's routes file) ---
   await app.register(authRoutes, { prefix: "/api/v1/auth" });
   await app.register(clientRoutes, { prefix: "/api/v1/clients" });
+  await app.register(agentDeviceRoutes, { prefix: "/api/v1/devices" });
   await app.register(deviceRoutes, { prefix: "/api/v1/devices" });
   await app.register(agentRoutes, { prefix: "/api/v1/agents" });
   await app.register(qrRoutes, { prefix: "/api/v1/qr" });

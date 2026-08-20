@@ -17,6 +17,9 @@ import { PrismaDeviceRepository } from "../modules/device/device.repository";
 import { DeviceService } from "../modules/device/device.service";
 import { DeviceLifecycleService } from "../modules/device/device.lifecycle.service";
 import { DeviceController } from "../modules/device/device.controller";
+import { PrismaAgentRepository } from "../modules/agent/agent.repository";
+import { AgentService } from "../modules/agent/agent.service";
+import { AgentController } from "../modules/agent/agent.controller";
 
 /**
  * Shared infrastructure singletons plus module service/repository pairs.
@@ -49,6 +52,10 @@ export function buildContainer(): AwilixContainer {
     deviceService: asClass(DeviceService).singleton(),
     deviceLifecycleService: asClass(DeviceLifecycleService).singleton(),
     deviceController: asClass(DeviceController).singleton(),
+
+    agentRepository: asClass(PrismaAgentRepository).singleton(),
+    agentService: asClass(AgentService).singleton(),
+    agentController: asClass(AgentController).singleton(),
   });
 
   return container;

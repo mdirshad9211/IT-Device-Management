@@ -25,7 +25,6 @@ describe("app boilerplate smoke test", () => {
   });
 
   it.each([
-    "/api/v1/agents",
     "/api/v1/qr",
     "/api/v1/other-network-devices",
     "/api/v1/notifications",
@@ -76,6 +75,16 @@ describe("app boilerplate smoke test", () => {
     expect(res.statusCode).toBe(401);
     expect(res.json().error.code).toBe("UNAUTHORIZED");
     expect(res.json().status).toBeUndefined();
+  });
+
+  it("POST /api/v1/agents/:id/poll without an agent API key is 401", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/agents/${randomUUID()}/poll`,
+      payload: { cpu: "i5" },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error.code).toBe("UNAUTHORIZED");
   });
 
   it("POST /api/v1/clients as IT_ENGINEER is 403 (Client edit is staff-only)", async () => {

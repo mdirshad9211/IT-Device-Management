@@ -69,6 +69,27 @@ export interface DomainEvents {
   "device.deleted": DeviceLifecycleEventPayload;
   "device.retired": DeviceLifecycleEventPayload;
   "device.scrapped": DeviceLifecycleEventPayload;
+  "agent.polled": {
+    agentId: string;
+    deviceId: string;
+    pollLogId: string;
+    status: string;
+  };
+  "device.storage.threshold_breached": {
+    deviceId: string;
+    clientId: string;
+    agentId: string;
+    storageUsedPercent: number;
+  };
+  "agent.deregistered": {
+    agentId: string;
+    deviceId: string;
+    clientId: string;
+  };
+  "agent.download_token.issued": {
+    actorId: string;
+    clientId: string;
+  };
 }
 
 export type DeviceLifecycleEventPayload = {

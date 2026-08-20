@@ -1,21 +1,13 @@
 # Inventory Management Module — Backend
 
-Fastify + TypeScript + PostgreSQL (Prisma) + Redis, modular monolith.
+Fastify + TypeScript + PostgreSQL (Prisma) + Redis/BullMQ, modular monolith.
 
-## Current status: boilerplate only
+## Current status: business modules implemented
 
-This is the project skeleton from Cursor Prompt 1–2 (see
-`docs/06-Cursor-Prompts-Backend.md` if you've copied it in) — folder structure,
-Prisma schema, shared kernel (errors/events/logger/prisma/queue), and a stub
-route per module so the app boots end-to-end. **No business logic is
-implemented yet.** Every module route currently returns:
-
-```json
-{ "module": "device", "status": "not_yet_implemented", "note": "..." }
-```
-
-That's expected — business logic gets added module by module once the
-SRS/flow documents are signed off, following the reference Cursor prompts.
+Auth, RBAC, Clients, Devices (allotment/lifecycle/history), Agents, QR, Other
+Network Devices, Notifications (async email), Audit (immutable trail with
+field-level diffs), and a daily lifecycle sweep job are implemented. OpenAPI
+UI lives at `/docs`.
 
 ## Prerequisites
 
@@ -25,37 +17,29 @@ SRS/flow documents are signed off, following the reference Cursor prompts.
 ## Setup
 
 ```bash
-# 1. Install dependencies
 npm install
-
-# 2. Copy env file and fill in real secrets
 cp .env.example .env
-# Generate a bcrypt hash for ADMIN_SECRET_PASSWORD_HASH:
+# Generate ADMIN_SECRET_PASSWORD_HASH:
 node -e "console.log(require('bcrypt').hashSync('your-secret', 10))"
 
-# 3. Start Postgres + Redis
 npm run docker:up
-
-# 4. Generate the Prisma client and run the initial migration
 npm run prisma:generate
-npm run prisma:migrate -- --name init
-
-# 5. Seed sample data (one AppUser per role, one Client, one Device)
+npm run prisma:migrate:deploy   # or: npm run prisma:migrate
 npm run seed
-
-# 6. Start the dev server
 npm run dev
 ```
 
-The server starts on `http://localhost:4000`. Check it's alive:
+Server: `http://localhost:4000`
 
 ```bash
 curl http://localhost:4000/health
-# { "status": "ok", "db": "ok", "redis": "ok" }
+# { "status":"ok","db":"ok","redis":"ok","docs":"/docs", ... }
 
-curl http://localhost:4000/api/v1/devices
-# { "module": "device", "status": "not_yet_implemented", ... }
+open http://localhost:4000/docs
 ```
+
+Seed password for all AppUsers: `Password123!`  
+Seed agent API key (device `DEL-LN-00101`): `seed-agent-delhi-key`
 
 ## Running tests
 
@@ -63,67 +47,51 @@ curl http://localhost:4000/api/v1/devices
 npm test
 ```
 
-The smoke test in `tests/integration/app.smoke.test.ts` confirms the app
-boots and every module stub responds — this is your regression check that
-the skeleton stays intact as business logic gets layered in.
+Integration suites skip gracefully when `postgres-test` (port 5433) is down.
 
-## What's NOT here yet (by design)
+## What's built
 
-- RBAC permission matrix (`src/shared/kernel/rbac`) — placeholder only
-- Auth (login, JWT issuance, agent API-key verification)
-- Any actual create/read/update/delete logic in any module
-- BullMQ workers (queue helpers exist in `shared/kernel/queue`, but nothing
-  enqueues or processes jobs yet)
+| Area | Status |
+|------|--------|
+| RBAC permission matrix + hooks | Done |
+| Auth (JWT login + agent API key) | Done |
+| Client CRUD / location / engineer assign | Done |
+| Device allotment, PATCH, assignments, lifecycle | Done |
+| Agent poll / download token / deregister | Done |
+| QR generate (1:1), image, resolve, run-poll | Done |
+| Other Network Devices + link to Device | Done |
+| Notifications (queue + nodemailer worker) | Done |
+| Audit (every mutation → AuditLog + fieldChanges) | Done |
+| Lifecycle sweep job (warn + hard-delete) | Done |
+| OpenAPI (`/docs`) from zod schemas | Done |
+
+## What's NOT here yet
+
 - Frontend integration / CORS allow-list tightening (currently `origin: true`
   for local development — lock this down before any real deployment)
+- Production SMTP credentials (leave `SMTP_HOST` empty for dry-run skips)
+- Multi-tenant SaaS isolation beyond Client scoping
 
 ## Folder structure
 
 ```
 src/
-├── app.ts                  # Fastify factory — plugins, DI container, module wiring
-├── server.ts                # Entry point
-├── config/
-│   ├── env.ts                # zod-validated environment loader
-│   └── container.ts          # awilix DI container (infra singletons only so far)
-├── shared/
-│   ├── kernel/
-│   │   ├── errors/            # AppError hierarchy
-│   │   ├── events/             # Domain event bus (EventEmitter2 wrapper)
-│   │   ├── logger/             # Pino singleton
-│   │   ├── prisma/             # PrismaClient singleton
-│   │   ├── queue/              # BullMQ queue/worker factories
-│   │   └── rbac/               # PLACEHOLDER — permission matrix not yet built
-│   └── http/
-│       ├── plugins/            # error-handler
-│       └── schemas/            # shared pagination schema
-├── modules/                  # one folder per domain module, all stubs for now
-│   ├── auth/
-│   ├── client/
-│   ├── device/
-│   ├── agent/
-│   ├── qr/
-│   ├── other-network-device/
-│   ├── notification/
-│   ├── audit/
-│   └── user-management/
-├── jobs/                     # scheduled jobs land here (lifecycle sweep, etc.)
+├── app.ts / server.ts
+├── config/          # env + awilix container
+├── shared/kernel/   # errors, events, prisma, queue, rbac, logger
+├── shared/http/     # error-handler, swagger, pagination
+├── modules/         # auth, client, device, agent, qr, ond, notification, audit, user-management
+├── jobs/            # BullMQ wiring (lifecycle-sweep)
 └── types/
-    └── fastify.d.ts           # request.container type augmentation
-
-prisma/
-├── schema.prisma
-└── seed.ts
-
-tests/
-├── unit/
-└── integration/
+prisma/              # schema, migrations, seed.ts
+tests/               # unit + integration
+docs/                # SYSTEM-OVERVIEW.md + SYSTEM-OVERVIEW.html + postman collection
 ```
 
-## Next step
+## Docs & Postman
 
-Once the SRS/flow documents are approved, open this repo in Cursor — the
-`.cursor/rules` file in this repo already carries the engineering standards
-(SOLID, repository pattern, event-driven cross-module communication, etc.),
-and each module's business logic can be built prompt-by-prompt from the
-reference Cursor prompts document.
+- **`docs/SYSTEM-OVERVIEW.md`** — full tutorial + every API (roles, body, real JSON responses, audit fieldChanges)
+- **`docs/SYSTEM-OVERVIEW.html`** — same content, open in a browser (start at section “How to use this document”)
+- **`docs/postman/Inventory-Backend.postman_collection.json`** — import into Postman
+
+First-time path: open the HTML → follow walkthrough steps 1–15 → use Postman or curl for each call.

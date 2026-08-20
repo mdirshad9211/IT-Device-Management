@@ -32,7 +32,7 @@ import { NotificationService } from "../modules/notification/notification.servic
 import { NotificationController } from "../modules/notification/notification.controller";
 import { NotificationListener } from "../modules/notification/notification.listener";
 import { NotificationMailer } from "../modules/notification/notification.mailer";
-import { LifecycleSweepService } from "../jobs/lifecycle-sweep.job";
+import { LifecycleSweepService } from "../modules/device/device.sweep.service";
 
 /**
  * Shared infrastructure singletons plus module service/repository pairs.

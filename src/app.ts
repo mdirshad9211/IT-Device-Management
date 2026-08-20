@@ -8,6 +8,7 @@ import { logger } from "./shared/kernel/logger";
 import { prisma } from "./shared/kernel/prisma";
 import { redisConnection } from "./shared/kernel/queue";
 import errorHandlerPlugin from "./shared/http/plugins/error-handler";
+import { registerSwagger } from "./shared/http/plugins/swagger";
 import { buildContainer } from "./config/container";
 import { env } from "./config/env";
 
@@ -22,6 +23,8 @@ import auditRoutes from "./modules/audit/audit.routes";
 import userManagementRoutes, {
   userManagementAssignmentRoutes,
 } from "./modules/user-management/user-management.routes";
+
+const startedAt = new Date();
 
 /**
  * Builds (but does not start) a Fastify instance. Exported separately from
@@ -39,6 +42,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(rateLimit, { max: 200, timeWindow: "1 minute" });
   await app.register(jwt, { secret: env.JWT_SECRET });
   await app.register(errorHandlerPlugin);
+  await registerSwagger(app as unknown as FastifyInstance);
 
   // --- DI container, available on every request as request.container ---
   const container = buildContainer();
@@ -51,9 +55,18 @@ export async function buildApp(): Promise<FastifyInstance> {
     request.container = container;
   });
 
-  // --- Health check: verifies DB + Redis connectivity ---
+  // --- Health check: DB + Redis (BullMQ) + process metadata ---
   app.get("/health", async (_request, reply) => {
-    const health = { status: "ok", db: "unknown", redis: "unknown" };
+    const health = {
+      status: "ok" as "ok" | "degraded",
+      service: "inventory-backend",
+      env: env.NODE_ENV,
+      uptimeSeconds: Math.floor((Date.now() - startedAt.getTime()) / 1000),
+      checkedAt: new Date().toISOString(),
+      db: "unknown" as "ok" | "unreachable" | "unknown",
+      redis: "unknown" as "ok" | "unreachable" | "unknown",
+      docs: "/docs",
+    };
 
     try {
       await Promise.race([
@@ -80,6 +93,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
 
     const isHealthy = health.db === "ok" && health.redis === "ok";
+    health.status = isHealthy ? "ok" : "degraded";
     reply.status(isHealthy ? 200 : 503).send(health);
   });
 

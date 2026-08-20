@@ -3,10 +3,12 @@ import { toSkipTake, type PaginationQuery } from "../../shared/http/schemas/pagi
 import type { Logger } from "pino";
 import type { AuditListFilter, AuditRepository } from "./audit.repository";
 import type { AuditAction } from "@prisma/client";
+import { enrichAuditableEvent } from "./audit.diff";
 
 /**
  * Persists AuditLog rows from domain mutation events. One code path: every
- * mutation payload is an {@link AuditableEvent}.
+ * mutation payload is an {@link AuditableEvent}. UPDATE rows are enriched with
+ * a field-level `fieldChanges` map so every minor change is explicit.
  */
 export class AuditService {
   constructor(
@@ -19,7 +21,7 @@ export class AuditService {
    */
   async record(event: AuditableEvent): Promise<void> {
     try {
-      await this.auditRepository.createFromEvent(event);
+      await this.auditRepository.createFromEvent(enrichAuditableEvent(event));
     } catch (error) {
       this.logger.error({ err: error, entityType: event.entityType, entityId: event.entityId }, "audit write failed");
     }

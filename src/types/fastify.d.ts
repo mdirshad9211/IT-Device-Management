@@ -19,4 +19,9 @@ declare module "fastify" {
     /** Set by `requireAgentAuth`. Absent on AppUser JWT requests. */
     agent?: { id: string; deviceId: string; clientId: string };
   }
+
+  interface FastifyInstance {
+    /** Root DI container (listeners + workers resolve from here in server.ts). */
+    diContainer: AwilixContainer;
+  }
 }

@@ -8,6 +8,8 @@ export type LifecyclePlan = {
   discardedAt: Date | null;
   deletionDueAt: Date | null;
   retiredFlag: boolean;
+  /** Cleared on REACTIVATE so a later discard can warn again. */
+  discardWarningSentAt?: Date | null;
 };
 
 export type LifecycleHandlerContext = {
@@ -53,6 +55,7 @@ const reactivate: LifecycleHandler = (ctx) => {
     discardedAt: null,
     deletionDueAt: null,
     retiredFlag: false,
+    discardWarningSentAt: null,
   };
 };
 

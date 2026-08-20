@@ -1,4 +1,4 @@
-import { AppUserRole } from "@prisma/client";
+import { AppUserRole, AuditAction } from "@prisma/client";
 import { NotFoundError, ValidationError } from "../../shared/kernel/errors";
 import type { DomainEventBus } from "../../shared/kernel/events";
 import { enforceAccess, UNSCOPED_ROLES } from "../../shared/kernel/rbac";
@@ -57,8 +57,12 @@ export class OtherNetworkDeviceService {
     });
 
     this.eventBus.emit("otherNetworkDevice.created", {
-      actorId: actor.userId,
-      otherNetworkDeviceId: created.id,
+      entityType: "OtherNetworkDevice",
+      entityId: created.id,
+      action: AuditAction.CREATE,
+      performedBy: actor.userId,
+      before: null,
+      after: created,
       clientId: created.clientId,
     });
 
@@ -115,8 +119,12 @@ export class OtherNetworkDeviceService {
 
     const updated = await this.otherNetworkDeviceRepository.update(id, data);
     this.eventBus.emit("otherNetworkDevice.updated", {
-      actorId: actor.userId,
-      otherNetworkDeviceId: id,
+      entityType: "OtherNetworkDevice",
+      entityId: id,
+      action: AuditAction.UPDATE,
+      performedBy: actor.userId,
+      before: existing,
+      after: updated,
       clientId: updated.clientId,
     });
     return this.toView(updated);
@@ -142,8 +150,12 @@ export class OtherNetworkDeviceService {
 
     const updated = await this.otherNetworkDeviceRepository.setAttachedDevice(id, input.attachedDeviceId);
     this.eventBus.emit("otherNetworkDevice.linked", {
-      actorId: actor.userId,
-      otherNetworkDeviceId: id,
+      entityType: "OtherNetworkDevice",
+      entityId: id,
+      action: AuditAction.UPDATE,
+      performedBy: actor.userId,
+      before: { attachedDeviceId: existing.attachedDeviceId },
+      after: { attachedDeviceId: updated.attachedDeviceId },
       clientId: updated.clientId,
       attachedDeviceId: updated.attachedDeviceId,
       previousAttachedDeviceId: existing.attachedDeviceId,
@@ -156,8 +168,12 @@ export class OtherNetworkDeviceService {
     await this.assertClientAccess(existing.clientId, actor, "delete");
     await this.otherNetworkDeviceRepository.delete(id);
     this.eventBus.emit("otherNetworkDevice.deleted", {
-      actorId: actor.userId,
-      otherNetworkDeviceId: id,
+      entityType: "OtherNetworkDevice",
+      entityId: id,
+      action: AuditAction.DELETE,
+      performedBy: actor.userId,
+      before: existing,
+      after: null,
       clientId: existing.clientId,
     });
   }

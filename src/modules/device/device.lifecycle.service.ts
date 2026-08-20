@@ -1,8 +1,8 @@
 import type { LifecycleEventType } from "@prisma/client";
+import { AppUserRole, AuditAction } from "@prisma/client";
 import { NotFoundError } from "../../shared/kernel/errors";
 import type { DomainEventBus } from "../../shared/kernel/events";
 import { enforceAccess } from "../../shared/kernel/rbac";
-import { AppUserRole } from "@prisma/client";
 import { lifecycleEventName, planLifecycleTransition } from "./device.lifecycle";
 import type { DeviceRepository } from "./device.repository";
 import type { Actor } from "./device.service";
@@ -49,9 +49,18 @@ export class DeviceLifecycleService {
     });
 
     const updated = await this.deviceRepository.applyLifecycle(deviceId, plan, eventType, actor.userId);
-    this.eventBus.emit(lifecycleEventName(eventType), {
-      actorId: actor.userId,
-      deviceId,
+    const eventName = lifecycleEventName(eventType);
+    this.eventBus.emit(eventName, {
+      entityType: "Device",
+      entityId: deviceId,
+      action: eventName === "device.deleted" ? AuditAction.DELETE : AuditAction.UPDATE,
+      performedBy: actor.userId,
+      before: { status: fromStatus },
+      after: {
+        status: plan.status,
+        deletionDueAt: plan.deletionDueAt,
+        discardedAt: plan.discardedAt,
+      },
       fromStatus,
       toStatus: plan.status,
       eventType,

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DeviceStatus, HardwareChangeType, LifecycleEventType, SoftwareChangeAction } from "@prisma/client";
 import { paginationSchema } from "../../shared/http/schemas/pagination";
+import { otherNetworkDeviceSummarySchema } from "../other-network-device/other-network-device.schemas";
 
 const jsonValue = z.unknown().optional();
 
@@ -117,6 +118,7 @@ export const deviceSchema = z.object({
 export const deviceDetailSchema = deviceSchema.extend({
   qrCode: qrCodeSchema.nullable(),
   currentAssignment: assignmentSchema.nullable(),
+  linkedOtherNetworkDevices: z.array(otherNetworkDeviceSummarySchema).default([]),
 });
 
 export const listDevicesResponseSchema = z.object({

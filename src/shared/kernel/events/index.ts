@@ -106,6 +106,28 @@ export interface DomainEvents {
     source: "qr";
     requestedAt: string;
   };
+  "otherNetworkDevice.created": {
+    actorId: string;
+    otherNetworkDeviceId: string;
+    clientId: string;
+  };
+  "otherNetworkDevice.updated": {
+    actorId: string;
+    otherNetworkDeviceId: string;
+    clientId: string;
+  };
+  "otherNetworkDevice.linked": {
+    actorId: string;
+    otherNetworkDeviceId: string;
+    clientId: string;
+    attachedDeviceId: string | null;
+    previousAttachedDeviceId: string | null;
+  };
+  "otherNetworkDevice.deleted": {
+    actorId: string;
+    otherNetworkDeviceId: string;
+    clientId: string;
+  };
 }
 
 export type DeviceLifecycleEventPayload = {

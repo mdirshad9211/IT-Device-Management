@@ -25,7 +25,6 @@ describe("app boilerplate smoke test", () => {
   });
 
   it.each([
-    "/api/v1/other-network-devices",
     "/api/v1/notifications",
     "/api/v1/audit-logs",
   ])("module stub at %s responds 200 with a not_yet_implemented status", async (url) => {
@@ -88,6 +87,13 @@ describe("app boilerplate smoke test", () => {
 
   it("GET /api/v1/qr/:deviceId/image without a JWT is 401, not a stub payload", async () => {
     const res = await app.inject({ method: "GET", url: `/api/v1/qr/${randomUUID()}/image` });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error.code).toBe("UNAUTHORIZED");
+    expect(res.json().status).toBeUndefined();
+  });
+
+  it("GET /api/v1/other-network-devices without a JWT is 401, not a stub payload", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/v1/other-network-devices" });
     expect(res.statusCode).toBe(401);
     expect(res.json().error.code).toBe("UNAUTHORIZED");
     expect(res.json().status).toBeUndefined();

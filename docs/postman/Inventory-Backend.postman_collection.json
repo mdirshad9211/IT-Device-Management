@@ -1,0 +1,333 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Inventory Backend",
+    "description": "Inventory Management Module API. Seed password: Password123!. Agent key: seed-agent-delhi-key. Base URL variable: {{baseUrl}}.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000" },
+    { "key": "token", "value": "" },
+    { "key": "clientId", "value": "" },
+    { "key": "deviceId", "value": "" },
+    { "key": "ondId", "value": "" },
+    { "key": "agentId", "value": "" },
+    { "key": "agentApiKey", "value": "seed-agent-delhi-key" }
+  ],
+  "item": [
+    {
+      "name": "Health & Docs",
+      "item": [
+        {
+          "name": "GET Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "OpenAPI JSON",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/docs/json"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (Super Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j.accessToken) pm.collectionVariables.set('token', j.accessToken);",
+                  "else if (j.token) pm.collectionVariables.set('token', j.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"super.admin@inventory.local\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Clients",
+      "item": [
+        {
+          "name": "List clients",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/clients?page=1&pageSize=20"
+          }
+        },
+        {
+          "name": "Create client",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j.id) pm.collectionVariables.set('clientId', j.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"CRL Pune\",\n  \"currentLocation\": \"CRL Pune - HQ\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/clients"
+          }
+        },
+        {
+          "name": "Change location",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentLocation\": \"CRL Pune - Annex\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/clients/{{clientId}}/location"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Devices",
+      "item": [
+        {
+          "name": "List devices",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/devices?page=1&pageSize=20"
+          }
+        },
+        {
+          "name": "Allot device",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j.id) pm.collectionVariables.set('deviceId', j.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"{{clientId}}\",\n  \"assetTag\": \"PUN-LN-00999\",\n  \"cpu\": \"Intel i5\",\n  \"ram\": \"16 GB\",\n  \"storageTotal\": \"512 GB SSD\",\n  \"assignment\": {\n    \"userName\": \"Priya Nair\",\n    \"userPhone\": \"+91 9800000000\",\n    \"userEmail\": \"priya.nair@client.local\",\n    \"department\": \"Engineering\",\n    \"managerName\": \"Sameer Kapoor\",\n    \"managerPhone\": \"+91 9800000001\",\n    \"managerEmail\": \"sameer.kapoor@client.local\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/devices"
+          }
+        },
+        {
+          "name": "Get device (with linked OND)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/devices/{{deviceId}}"
+          }
+        },
+        {
+          "name": "PATCH device inventory",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cpu\": \"Intel i7-1355U\",\n  \"ram\": \"32 GB\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/devices/{{deviceId}}"
+          }
+        },
+        {
+          "name": "Lifecycle DISCARD",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventType\": \"DISCARD\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/devices/{{deviceId}}/lifecycle"
+          }
+        }
+      ]
+    },
+    {
+      "name": "QR",
+      "item": [
+        {
+          "name": "QR image PNG",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/qr/{{deviceId}}/image?format=png"
+          }
+        },
+        {
+          "name": "Resolve QR",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/qr/resolve?qrValue=INV:DEL-LN-00101"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Other Network Devices",
+      "item": [
+        {
+          "name": "Create OND",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j.id) pm.collectionVariables.set('ondId', j.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"{{clientId}}\",\n  \"type\": \"KEYBOARD\",\n  \"name\": \"Logitech K120\",\n  \"scannedSerialNumber\": \"SCAN-999\",\n  \"manualSerialNumber\": \"MANUAL-111\",\n  \"warrantyStatus\": \"UNDER_WARRANTY\",\n  \"warrantyExpiryDate\": \"2030-01-01\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/other-network-devices"
+          }
+        },
+        {
+          "name": "Link OND to device",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attachedDeviceId\": \"{{deviceId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/other-network-devices/{{ondId}}/link"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Agents",
+      "item": [
+        {
+          "name": "Poll (agent API key)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "x-agent-api-key", "value": "{{agentApiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cpu\": \"Intel i5-1345U\",\n  \"ram\": \"16 GB\",\n  \"storageUsedPercent\": 82,\n  \"installedSoftware\": [\"Chrome\", \"VS Code\"]\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/agents/{{agentId}}/poll"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit & Notifications",
+      "item": [
+        {
+          "name": "List audit logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/audit-logs?page=1&pageSize=50"
+          }
+        },
+        {
+          "name": "List audit for one device",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/audit-logs?entityType=Device&entityId={{deviceId}}"
+          }
+        },
+        {
+          "name": "List notifications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/notifications?page=1&pageSize=50"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/users"
+          }
+        }
+      ]
+    }
+  ]
+}

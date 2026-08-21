@@ -3,7 +3,7 @@ import { AuditAction, DeviceStatus, LifecycleEventType } from "@prisma/client";
 import {
   DISCARD_WARNING_LEAD_DAYS,
   LifecycleSweepService,
-} from "../../../src/jobs/lifecycle-sweep.job";
+} from "../../../src/modules/device/device.sweep.service";
 import type { DeviceRepository, SweepDeviceRow } from "../../../src/modules/device/device.repository";
 import type { DomainEventBus } from "../../../src/shared/kernel/events";
 import type { Logger } from "pino";
@@ -87,7 +87,6 @@ describe("LifecycleSweepService", () => {
       }),
     );
 
-    // Second run: claim fails → no second emit
     emit.mockClear();
     const second = await service.run(new Date("2026-08-20T12:00:00.000Z"));
     expect(second.warned).toBe(0);

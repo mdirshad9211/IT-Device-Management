@@ -41,6 +41,7 @@ export const downloadAgentQuerySchema = z.object({
 
 export const softwareChangeSchema = z.object({
   softwareName: z.string(),
+  version: z.string().nullable(),
   action: z.nativeEnum(SoftwareChangeAction),
 });
 
@@ -68,4 +69,24 @@ export const downloadAgentResponseSchema = z.object({
 export const deregisterResponseSchema = z.object({
   agentId: z.string().uuid(),
   deregistered: z.literal(true),
+});
+
+export const pollLogSchema = z.object({
+  id: z.string().uuid(),
+  agentId: z.string().uuid(),
+  status: z.nativeEnum(PollStatus),
+  isStale: z.boolean(),
+  polledAt: z.coerce.date(),
+  payload: z.unknown(),
+});
+
+export const listPollLogsResponseSchema = z.object({
+  items: z.array(pollLogSchema),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+  total: z.number().int(),
+});
+
+export const deviceIdForPollsParamsSchema = z.object({
+  deviceId: z.string().uuid(),
 });

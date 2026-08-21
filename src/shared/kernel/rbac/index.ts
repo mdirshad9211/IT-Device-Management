@@ -1,7 +1,7 @@
 export { AppUserRole, RBAC_ACTIONS, RBAC_ENTITIES, UNSCOPED_ROLES } from "./types";
 export type { AccessContext, CurrentDeviceAssignmentScope, RbacAction, RbacEntity } from "./types";
 
-export { PERMISSION_MATRIX, roleHasPermission } from "./permission-matrix";
+export { DEFAULT_PERMISSION_MATRIX, PERMISSION_MATRIX, roleHasPermission, getEffectivePermissionMatrix } from "./permission-matrix";
 
 export { assertRolePermission } from "./role-check";
 export { assertClientScope } from "./client-scope-check";

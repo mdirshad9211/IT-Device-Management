@@ -145,6 +145,7 @@ export const softwareHistoryItemSchema = z.object({
   deviceId: z.string().uuid(),
   pollLogId: z.string().uuid().nullable(),
   softwareName: z.string(),
+  version: z.string().nullable(),
   action: z.nativeEnum(SoftwareChangeAction),
   detectedAt: z.coerce.date(),
 });

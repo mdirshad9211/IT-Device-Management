@@ -45,4 +45,13 @@ export async function agentDeviceRoutes(fastify: FastifyInstance): Promise<void>
       return controller.downloadAgent(request, reply);
     },
   );
+
+  fastify.get(
+    "/:deviceId/poll-logs",
+    { onRequest: [requireAppUserAuth, requirePermission("Device", "view")] },
+    async (request, reply) => {
+      const controller = request.container.resolve<AgentController>("agentController");
+      return controller.listPollLogs(request, reply);
+    },
+  );
 }

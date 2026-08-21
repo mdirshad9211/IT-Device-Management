@@ -1,10 +1,8 @@
 import { buildApp } from "./app";
 import { env } from "./config/env";
 import { disconnectPrisma } from "./shared/kernel/prisma";
-import { redisConnection } from "./shared/kernel/queue";
 import { startLifecycleSweepJob } from "./jobs/lifecycle-sweep.job";
 import { startNotificationWorker } from "./modules/notification/notification.worker";
-import type { Worker } from "bullmq";
 
 async function main() {
   const app = await buildApp();
@@ -26,21 +24,15 @@ async function main() {
 
   const shutdown = async (signal: string) => {
     app.log.info(`Received ${signal}, shutting down gracefully...`);
-    await closeWorker(notificationWorker);
-    await closeWorker(sweep.worker);
-    await sweep.queue.close();
+    await notificationWorker.close();
+    sweep.stop();
     await app.close();
     await disconnectPrisma();
-    redisConnection.disconnect();
     process.exit(0);
   };
 
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
   process.on("SIGINT", () => void shutdown("SIGINT"));
-}
-
-async function closeWorker(worker: Worker): Promise<void> {
-  await worker.close();
 }
 
 main().catch((err) => {

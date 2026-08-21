@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inventory Backend — Complete API & Flow Guide</title>
+  <style>
+    :root {
+      --bg: #0c1118;
+      --panel: #151c27;
+      --panel2: #1b2433;
+      --text: #e8eef7;
+      --muted: #9aabbf;
+      --accent: #4aa3ff;
+      --ok: #3dd68c;
+      --warn: #f0b429;
+      --err: #ff6b7a;
+      --line: #2a3548;
+      --code-bg: #0a0e14;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+    nav {
+      position: sticky; top: 0; height: 100vh; overflow: auto;
+      background: var(--panel); border-right: 1px solid var(--line);
+      padding: 1.25rem 1rem 2rem;
+      font-size: 0.88rem;
+    }
+    nav h1 { font-size: 0.95rem; margin: 0 0 0.75rem; color: var(--accent); }
+    nav a {
+      display: block; color: var(--muted); text-decoration: none;
+      padding: 0.28rem 0.4rem; border-radius: 6px;
+    }
+    nav a:hover { background: var(--panel2); color: var(--text); }
+    main { padding: 2rem 2rem 4rem; max-width: 920px; }
+    h1.page { font-size: 1.85rem; margin: 0 0 0.4rem; letter-spacing: -0.02em; }
+    .lead { color: var(--muted); margin: 0 0 1.5rem; max-width: 70ch; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1.2rem 1.35rem;
+      margin: 1.1rem 0;
+    }
+    h2 { margin: 0 0 0.75rem; font-size: 1.2rem; color: var(--accent); }
+    h3 { margin: 1.1rem 0 0.45rem; font-size: 1.02rem; }
+    h4 { margin: 0.8rem 0 0.35rem; font-size: 0.92rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 0.5rem 0 0.8rem; }
+    th, td { border-bottom: 1px solid var(--line); padding: 0.45rem 0.5rem; text-align: left; vertical-align: top; }
+    th { color: var(--muted); }
+    code, pre { font-family: ui-monospace, Consolas, monospace; font-size: 0.82rem; }
+    code { background: var(--code-bg); padding: 0.1rem 0.35rem; border-radius: 4px; }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      overflow-x: auto;
+      margin: 0.4rem 0 0.8rem;
+    }
+    .meta {
+      display: flex; flex-wrap: wrap; gap: 0.4rem;
+      margin: 0.35rem 0 0.75rem;
+    }
+    .pill {
+      display: inline-block; border-radius: 999px; padding: 0.15rem 0.65rem;
+      font-size: 0.75rem; font-weight: 600; border: 1px solid var(--line);
+    }
+    .pill.method { background: #12324f; color: var(--accent); }
+    .pill.auth { background: #1a2e22; color: var(--ok); }
+    .pill.role { background: #2a2438; color: #c4b5fd; }
+    .pill.warn { background: #3a2e12; color: var(--warn); }
+    .endpoint {
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      margin: 0.9rem 0;
+    }
+    .endpoint h3 { margin-top: 0; font-family: ui-monospace, Consolas, monospace; font-size: 0.95rem; }
+    ol.walk { padding-left: 1.25rem; }
+    ol.walk li { margin: 0.35rem 0; }
+    ul { margin: 0.4rem 0 0.6rem 1.2rem; }
+    .note {
+      border-left: 3px solid var(--accent);
+      padding: 0.55rem 0.8rem;
+      background: #122033;
+      border-radius: 0 8px 8px 0;
+      color: var(--muted);
+      margin: 0.6rem 0;
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      nav { position: relative; height: auto; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav>
+    <h1>Contents</h1>
+    <a href="#how">0. How to use this doc</a>
+    <a href="#walk">Walkthrough steps</a>
+    <a href="#flow">1. System flow</a>
+    <a href="#health">2. Health</a>
+    <a href="#auth">3. Auth</a>
+    <a href="#users">4. Users</a>
+    <a href="#clients">5. Clients</a>
+    <a href="#devices">6. Devices</a>
+    <a href="#qr">7. QR</a>
+    <a href="#agents">8. Agents</a>
+    <a href="#ond">9. Other Network Devices</a>
+    <a href="#audit">10. Audit</a>
+    <a href="#notif">11. Notifications</a>
+    <a href="#errors">12. Errors</a>
+    <a href="#jobs">13. Jobs</a>
+    <a href="#seed">14. Seed cheat-sheet</a>
+    <a href="#curl">15. Curl recipe</a>
+  </nav>
+
+  <main>
+    <h1 class="page">Inventory Backend — Complete API &amp; Flow Guide</h1>
+    <p class="lead">
+      Tutorial + API reference with roles, request bodies, and realistic responses.
+      Base URL <code>http://localhost:4000</code> · OpenAPI <code>/docs</code> ·
+      Postman <code>docs/postman/Inventory-Backend.postman_collection.json</code>
+    </p>
+
+    <section id="how">
+      <h2>0. How to use this document (read first)</h2>
+      <p>Follow <strong>A → B → C</strong> the first time. Later jump any endpoint from the left nav.</p>
+
+      <h3>A — Start the stack</h3>
+      <pre>npm install
+cp .env.example .env
+npm run docker:up
+npm run prisma:migrate:deploy
+npm run seed
+npm run dev
+
+curl http://localhost:4000/health</pre>
+      <p>Expect <code>"db":"ok"</code> and <code>"redis":"ok"</code>. Redis is required for notifications and the lifecycle job.</p>
+
+      <h3>B — Seed accounts &amp; auth</h3>
+      <table>
+        <thead><tr><th>Email</th><th>Role</th><th>Password</th><th>Can do</th></tr></thead>
+        <tbody>
+          <tr><td><code>super.admin@inventory.local</code></td><td>SUPER_ADMIN</td><td>Password123!</td><td>Everything + users + audit</td></tr>
+          <tr><td><code>dgn.manager@inventory.local</code></td><td>DGN_IT_MANAGER</td><td>Password123!</td><td>Staff + audit + MANUAL_DELETE</td></tr>
+          <tr><td><code>service.manager@inventory.local</code></td><td>SERVICE_MANAGER</td><td>Password123!</td><td>Client/Device/OND edit</td></tr>
+          <tr><td><code>ravi.sharma@inventory.local</code></td><td>IT_ENGINEER</td><td>Password123!</td><td>Edit assigned clients only</td></tr>
+          <tr><td><code>sameer.kapoor@client.local</code></td><td>CLIENT_MANAGER</td><td>Password123!</td><td>View managed devices</td></tr>
+          <tr><td><code>priya.nair@client.local</code></td><td>EMPLOYEE</td><td>Password123!</td><td>View own device</td></tr>
+        </tbody>
+      </table>
+      <div class="note">
+        AppUser APIs: <code>Authorization: Bearer &lt;token&gt;</code><br/>
+        Agent APIs: <code>x-agent-api-key: seed-agent-delhi-key</code> (device DEL-LN-00101)
+      </div>
+
+      <h3 id="walk">C — Recommended first-time walkthrough</h3>
+      <ol class="walk">
+        <li><code>GET /health</code> — confirm db/redis</li>
+        <li><code>POST /api/v1/auth/login</code> as super.admin — copy <code>token</code></li>
+        <li><code>GET /api/v1/clients</code> — see seeded sites</li>
+        <li><code>POST /api/v1/clients</code> — create a site; copy <code>id</code></li>
+        <li><code>PATCH /clients/:id/location</code> — location history</li>
+        <li><code>POST /api/v1/devices</code> — allot laptop; copy device <code>id</code></li>
+        <li><code>GET /devices/:id</code> — see QR + assignment</li>
+        <li><code>PATCH /devices/:id</code> — change cpu/ram</li>
+        <li><code>GET /audit-logs?entityType=Device&amp;entityId=...</code> — see <code>fieldChanges</code></li>
+        <li>Create OND → <code>PATCH .../link</code> → re-GET device → <code>linkedOtherNetworkDevices</code></li>
+        <li>Agent poll with storage 82% → check <code>GET /notifications</code></li>
+        <li><code>POST .../lifecycle</code> with DISCARD</li>
+        <li>Repeat allot with EMPLOYEE token → expect <code>403 FORBIDDEN</code></li>
+      </ol>
+      <p>Each API section below documents: method/path, auth, roles, body, <strong>real success JSON</strong>, errors, and side effects.</p>
+    </section>
+
+    <section id="flow">
+      <h2>1. System flow</h2>
+      <pre>HTTP → Routes + RBAC (401/403)
+    → Controller → Service → Prisma
+    → DomainEventBus (AuditableEvent)
+         ├─ AuditListener → AuditLog (before/after/fieldChanges)
+         └─ NotificationListener → BullMQ → SMTP worker</pre>
+      <p>Modules never import another module’s repository. Cross-module work = events only.</p>
+    </section>
+
+    <section id="health">
+      <h2>2. Health</h2>
+      <div class="endpoint">
+        <h3>GET /health</h3>
+        <div class="meta">
+          <span class="pill method">GET</span>
+          <span class="pill auth">Public</span>
+        </div>
+        <h4>Success 200</h4>
+        <pre>{
+  "status": "ok",
+  "service": "inventory-backend",
+  "env": "development",
+  "uptimeSeconds": 42,
+  "checkedAt": "2026-08-20T15:00:00.000Z",
+  "db": "ok",
+  "redis": "ok",
+  "docs": "/docs"
+}</pre>
+        <p>Returns <code>503</code> with <code>"status":"degraded"</code> if db or redis is unreachable.</p>
+      </div>
+    </section>
+
+    <section id="auth">
+      <h2>3. Auth</h2>
+      <div class="endpoint">
+        <h3>POST /api/v1/auth/login</h3>
+        <div class="meta">
+          <span class="pill method">POST</span>
+          <span class="pill auth">Public</span>
+          <span class="pill role">Any AppUser</span>
+        </div>
+        <h4>Body</h4>
+        <pre>{
+  "email": "super.admin@inventory.local",
+  "password": "Password123!"
+}</pre>
+        <h4>Success 200</h4>
+        <pre>{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "11111111-1111-1111-1111-111111111111",
+    "name": "Super Admin",
+    "email": "super.admin@inventory.local",
+    "role": "SUPER_ADMIN"
+  }
+}</pre>
+        <h4>Errors</h4>
+        <pre>{ "error": { "code": "VALIDATION_ERROR", "message": "Request failed validation", "details": {} } }
+{ "error": { "code": "UNAUTHORIZED", "message": "Invalid email or password" } }</pre>
+      </div>
+    </section>
+
+    <section id="users">
+      <h2>4. Users</h2>
+
+      <div class="endpoint">
+        <h3>GET /api/v1/users</h3>
+        <div class="meta">
+          <span class="pill method">GET</span>
+          <span class="pill auth">JWT</span>
+          <span class="pill role">SUPER_ADMIN only</span>
+        </div>
+        <p>Query: <code>?page=1&amp;pageSize=20</code></p>
+        <h4>Success 200</h4>
+        <pre>{
+  "items": [{
+    "id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "name": "Ravi Sharma",
+    "email": "ravi.sharma@inventory.local",
+    "role": "IT_ENGINEER",
+    "isActive": true,
+    "createdAt": "2026-08-20T10:00:00.000Z"
+  }],
+  "page": 1, "pageSize": 20, "total": 13
+}</pre>
+        <h4>403 EMPLOYEE</h4>
+        <pre>{ "error": { "code": "FORBIDDEN", "message": "Role EMPLOYEE is not permitted to access this resource" } }</pre>
+      </div>
+
+      <div class="endpoint">
+        <h3>POST /api/v1/users</h3>
+        <div class="meta">
+          <span class="pill method">POST</span>
+          <span class="pill auth">JWT</span>
+          <span class="pill role">SUPER_ADMIN</span>
+        </div>
+        <h4>Body</h4>
+        <pre>{
+  "name": "New Engineer",
+  "email": "new.engineer@inventory.local",
+  "password": "Password123!",
+  "role": "IT_ENGINEER",
+  "isActive": true
+}</pre>
+        <h4>Success 201</h4>
+        <pre>{
+  "id": "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22",
+  "name": "New Engineer",
+  "email": "new.engineer@inventory.local",
+  "role": "IT_ENGINEER",
+  "isActive": true,
+  "createdAt": "2026-08-20T15:05:00.000Z"
+}</pre>
+        <p><strong>Side effect:</strong> <code>appUser.created</code> → Audit CREATE.</p>
+      </div>
+
+      <div class="endpoint">
+        <h3>PATCH /api/v1/users/:id</h3>
+        <div class="meta">
+          <span class="pill method">PATCH</span>
+          <span class="pill auth">JWT</span>
+          <span class="pill role">SUPER_ADMIN</span>
+        </div>
+        <h4>Body</h4>
+        <pre>{ "isActive": false, "name": "Ravi Sharma (Offboarded)" }</pre>
+        <p><strong>Side effect:</strong> Audit UPDATE with <code>fieldChanges</code>.</p>
+      </div>
+
+      <div class="endpoint">
+        <h3>PATCH /api/v1/devices/:deviceId/assignments/:assignmentId/link-account</h3>
+        <div class="meta">
+          <span class="pill method">PATCH</span>
+          <span class="pill auth">JWT</span>
+          <span class="pill role">SUPER_ADMIN · DGN_IT_MANAGER</span>
+        </div>
+        <p>Links an <em>existing</em> AppUser by email. Never auto-creates accounts.</p>
+        <h4>Body</h4>
+        <pre>{ "email": "priya.nair@client.local", "linkAs": "employee" }</pre>
+        <h4>Success 200</h4>
+        <pre>{
+  "deviceId": "d1111111-1111-1111-1111-111111111111",
+  "assignmentId": "a2222222-2222-2222-2222-222222222222",
+  "employeeUserId": "e3333333-3333-3333-3333-333333333333",
+  "managerUserId": null,
+  "linkedUser": {
+    "id": "e3333333-3333-3333-3333-333333333333",
+    "name": "Priya Nair",
+    "email": "priya.nair@client.local",
+    "role": "EMPLOYEE",
+    "isActive": true,
+    "createdAt": "2026-08-20T10:00:00.000Z"
+  },
+  "linkAs": "employee"
+}</pre>
+      </div>
+    </section>
+
+    <section id="clients">
+      <h2>5. Clients (sites)</h2>
+
+      <div class="endpoint">
+        <h3>GET /api/v1/clients</h3>
+        <div class="meta">
+          <span class="pill method">GET</span>
+          <span class="pill auth">JWT</span>
+          <span class="pill role">All roles (scoped list)</span>
+        </div>
+        <p>Engineers see assigned clients only. CLIENT_MANAGER / EMPLOYEE get empty directory.</p>
+        <h4>Success 200</h4>
+        <pre>{
+  "items": [{
+    "id": "c1111111-1111-1111-1111-111111111111",
+    "name": "CRL Delhi",
+    "currentLocation": "CRL Delhi - Floor 2",
+    "createdAt": "2026-08-20T10:00:00.000Z",
+    "updatedAt": "2026-08-20T10:00:00.000Z"
+  }],
+  "page": 1, "pageSize": 20, "total": 3
+}</pre>
+      </div>
+
+      <div class="endpoint">
+        <h3>POST /api/v1/clients</h3>
+        <div class="meta">
+          <span class="pill method">POST</span>
+          <span class="pill auth">JWT</span>
+          <span class="pill role">SUPER_ADMIN · DGN_IT_MANAGER · SERVICE_MANAGER</span>
+          <span class="pill warn">Not IT_ENGINEER</span>
+        </div>
+        <h4>Body</h4>
+        <pre>{ "name": "CRL Pune", "currentLocation": "CRL Pune - HQ" }</pre>
+        <h4>Success 201</h4>
+        <pre>{
+  "id": "c9999999-9999-9999-9999-999999999999",
+  "name": "CRL Pune",
+  "currentLocation": "CRL Pune - HQ",
+  "createdAt": "2026-08-20T15:10:00.000Z",
+  "updatedAt": "2026-08-20T15:10:00.000Z"
+}</pre>
+      </div>
+
+      <div class="endpoint">
+        <h3>PATCH /api/v1/clients/:id/location</h3>
+        <div class="meta">
+          <span class="pill method">PATCH</span>
+          <span class="pill auth">JWT</span>
+          <span class="pill role">Client edit roles</span>
+        </div>
+        <p>FR-MOVE-01 — appends SiteLocation; does not touch Devices.</p>
+        <h4>Body</h4>
+        <pre>{ "currentLocation": "CRL Pune - Annex" }</pre>
+      </div>
+
+      <div class="endpoint">
+        <h3>POST /api/v1/clients/:id/engineers</h3>
+        <div class="meta"><span class="pill method">POST</span><span class="pill auth">JWT</span><span class="pill role">Client edit</span></div>
+        <h4>Body</h4>
+        <pre>{ "userId": "&lt;IT_ENGINEER uuid&gt;" }</pre>
+        <h4>Success 201</h4>
+        <pre>{
+  "id": "ea111111-1111-1111-1111-111111111111",
+  "appUserId": "eng-uuid",
+  "clientId": "client-uuid",
+  "isActive": true,
+  "assignedAt": "2026-08-20T15:12:00.000Z",
+  "unassignedAt": null
+}</pre>
+      </div>
+
+      <div class="endpoint">
+        <h3>DELETE /api/v1/clients/:id/engineers/:userId</h3>
+        <div class="meta"><span class="pill method">DELETE</span><span class="pill auth">JWT</span><span class="pill role">Client edit</span></div>
+        <p>Sets assignment <code>isActive=false</code>. Does not deactivate AppUser.</p>
+      </div>
+    </section>
+
+    <section id="devices">
+      <h2>6. Devices (Site Inventory)</h2>
+
+      <div class="endpoint">
+        <h3>POST /api/v1/devices — Allotment</h3>
+        <div class="meta">
+          <span class="pill method">POST</span>
+          <span class="pill auth">JWT</span>
+          <span class="pill role">SUPER_ADMIN · DGN · SERVICE · IT_ENGINEER*</span>
+        </div>
+        <p>*Engineer must be assigned to <code>clientId</code>. Creates Device + Assignment + QR in <strong>one transaction</strong>.</p>
+        <h4>Body</h4>
+        <pre>{
+  "clientId": "c1111111-1111-1111-1111-111111111111",
+  "assetTag": "PUN-LN-00999",
+  "cpu": "Intel Core i5-1345U",
+  "ram": "16 GB",
+  "storageTotal": "512 GB SSD",
+  "storageUsedPercent": 12,
+  "installedSoftware": ["Chrome", "VS Code"],
+  "assignment": {
+    "userName": "Priya Nair",
+    "userPhone": "+91 9800000000",
+    "userEmail": "priya.nair@client.local",
+    "department": "Engineering",
+    "managerName": "Sameer Kapoor",
+    "managerPhone": "+91 9800000001",
+    "managerEmail": "sameer.kapoor@client.local"
+  }
+}</pre>
+        <h4>Success 201</h4>
+        <pre>{
+  "id": "d9999999-9999-9999-9999-999999999999",
+  "clientId": "c1111111-1111-1111-1111-111111111111",
+  "assetTag": "PUN-LN-00999",
+  "cpu": "Intel Core i5-1345U",
+  "ram": "16 GB",
+  "storageTotal": "512 GB SSD",
+  "storageUsedPercent": 12,
+  "pciCards": null,
+  "soundCards": null,
+  "connectedDevices": null,
+  "installedSoftware": ["Chrome", "VS Code"],
+  "status": "ACTIVE",
+  "discardedAt": null,
+  "deletionDueAt": null,
+  "discardWarningSentAt": null,
+  "retiredFlag": false,
+  "createdAt": "2026-08-20T15:20:00.000Z",
+  "updatedAt": "2026-08-20T15:20:00.000Z",
+  "qrCode": {
+    "id": "q9999999-9999-9999-9999-999999999999",
+    "deviceId": "d9999999-9999-9999-9999-999999999999",
+    "qrValue": "INV:PUN-LN-00999",
+    "printCount": 0,
+    "createdAt": "2026-08-20T15:20:00.000Z"
+  },
+  "currentAssignment": {
+    "id": "a9999999-9999-9999-9999-999999999999",
+    "deviceId": "d9999999-9999-9999-9999-999999999999",
+    "userName": "Priya Nair",
+    "userPhone": "+91 9800000000",
+    "userEmail": "priya.nair@client.local",
+    "department": "Engineering",
+    "managerName": "Sameer Kapoor",
+    "managerPhone": "+91 9800000001",
+    "managerEmail": "sameer.kapoor@client.local",
+    "employeeUserId": null,
+    "managerUserId": null,
+    "managerAcknowledgedAt": null,
+    "isCurrent": true,
+    "assignedAt": "2026-08-20T15:20:00.000Z",
+    "unassignedAt": null
+  },
+  "linkedOtherNetworkDevices": []
+}</pre>
+        <p><strong>Side effects:</strong> Audit CREATE + email job to userEmail/managerEmail; <code>qr.generated</code> audited.</p>
+      </div>
+
+      <div class="endpoint">
+        <h3>GET /api/v1/devices · GET /api/v1/devices/:id</h3>
+        <div class="meta"><span class="pill method">GET</span><span class="pill auth">JWT</span><span class="pill role">All (scoped)</span></div>
+        <p>Same DeviceDetail shape. List supports <code>?clientId=&amp;status=&amp;page=&amp;pageSize=</code>.</p>
+      </div>
+
+      <div class="endpoint">
+        <h3>PATCH /api/v1/devices/:id</h3>
+        <div class="meta"><span class="pill method">PATCH</span><span class="pill auth">JWT</span><span class="pill role">Device edit</span></div>
+        <h4>Body</h4>
+        <pre>{ "cpu": "Intel Core i7-1355U", "ram": "32 GB", "storageUsedPercent": 44 }</pre>
+        <h4>Audit after (what you see in /audit-logs)</h4>
+        <pre>{
+  "cpu": "Intel Core i7-1355U",
+  "ram": "32 GB",
+  "storageUsedPercent": 44,
+  "fieldChanges": {
+    "cpu": { "from": "Intel Core i5-1345U", "to": "Intel Core i7-1355U" },
+    "ram": { "from": "16 GB", "to": "32 GB" },
+    "storageUsedPercent": { "from": 12, "to": 44 }
+  },
+  "changedAt": "2026-08-20T15:25:00.000Z"
+}</pre>
+        <div class="note">Every minor field change is recorded here — this is the complete change history.</div>
+      </div>
+
+      <div class="endpoint">
+        <h3>POST /api/v1/devices/:id/assignments</h3>
+        <div class="meta"><span class="pill method">POST</span><span class="pill auth">JWT</span><span class="pill role">Device edit</span></div>
+        <p>Closes current assignment; creates new current row. Device id + QR unchanged. Body = same <code>assignment</code> object as allotment.</p>
+      </div>
+
+      <div class="endpoint">
+        <h3>POST /api/v1/devices/:id/lifecycle</h3>
+        <div class="meta"><span class="pill method">POST</span><span class="pill auth">JWT</span><span class="pill role">Device edit</span></div>
+        <h4>Body</h4>
+        <pre>{ "eventType": "DISCARD" }</pre>
+        <p><code>eventType</code>: DISCARD | REACTIVATE | MANUAL_DELETE | RETIRE | SCRAP.<br/>
+        MANUAL_DELETE = SUPER_ADMIN / DGN_IT_MANAGER only (SERVICE_MANAGER → 403).</p>
+        <h4>Success 200 (DISCARD)</h4>
+        <pre>{
+  "status": "DISCARDED",
+  "discardedAt": "2026-08-20T15:30:00.000Z",
+  "deletionDueAt": "2026-11-18T15:30:00.000Z",
+  "retiredFlag": false
+}</pre>
+        <p><code>deletionDueAt</code> = now + 90 days. Sweep warns ~15 days before; hard-deletes after due.</p>
+      </div>
+
+      <div class="endpoint">
+        <h3>GET .../history/software · .../history/hardware</h3>
+        <div class="meta"><span class="pill method">GET</span><span class="pill auth">JWT</span><span class="pill role">Device view</span></div>
+        <h4>Software item</h4>
+        <pre>{
+  "id": "...",
+  "deviceId": "...",
+  "pollLogId": "...",
+  "softwareName": "Slack",
+  "action": "ADDED",
+  "detectedAt": "2026-08-20T15:40:00.000Z"
+}</pre>
+      </div>
+
+      <div class="endpoint">
+        <h3>GET /api/v1/devices/download-agent?clientId=...</h3>
+        <div class="meta"><span class="pill method">GET</span><span class="pill auth">JWT</span><span class="pill role">Device edit</span></div>
+        <pre>{
+  "clientId": "c1111111-1111-1111-1111-111111111111",
+  "token": "eyJ...",
+  "expiresAt": "2026-08-20T16:20:00.000Z",
+  "tokenType": "agent-download"
+}</pre>
+      </div>
+    </section>
+
+    <section id="qr">
+      <h2>7. QR</h2>
+      <div class="endpoint">
+        <h3>GET /api/v1/qr/:deviceId/image?format=png|svg</h3>
+        <div class="meta"><span class="pill method">GET</span><span class="pill auth">JWT</span><span class="pill role">Device view</span></div>
+        <p>Returns binary PNG or SVG text. Increments printCount → Audit <code>qr.printed</code>.</p>
+      </div>
+      <div class="endpoint">
+        <h3>GET /api/v1/qr/resolve/:qrValue</h3>
+        <div class="meta"><span class="pill method">GET</span><span class="pill auth">JWT</span><span class="pill role">Device view</span></div>
+        <p>Example: <code>/api/v1/qr/resolve/INV:DEL-LN-00101</code></p>
+        <h4>Success (fresh)</h4>
+        <pre>{
+  "status": "ok",
+  "stale": false,
+  "qrValue": "INV:DEL-LN-00101",
+  "device": { "id": "...", "assetTag": "DEL-LN-00101", "status": "ACTIVE" },
+  "agent": { "id": "...", "lastPollAt": "2026-08-20T14:00:00.000Z", "lastPollStatus": "SUCCESS" }
+}</pre>
+        <p><code>status: "stale_warning"</code> when QR unknown, agent missing, or poll older than threshold.</p>
+      </div>
+      <div class="endpoint">
+        <h3>POST /api/v1/qr/:deviceId/run-poll</h3>
+        <div class="meta"><span class="pill method">POST</span><span class="pill auth">JWT</span><span class="pill role">Device edit</span></div>
+        <p>Emits <code>agent.poll.requested</code>. Returns <code>{ deviceId, agentId, requestedAt }</code>.</p>
+      </div>
+      <div class="note">One QR per device: service ConflictError + DB <code>QrCode.deviceId @unique</code> (P2002 if bypassed).</div>
+    </section>
+
+    <section id="agents">
+      <h2>8. Agents</h2>
+      <div class="endpoint">
+        <h3>POST /api/v1/agents/:agentId/poll</h3>
+        <div class="meta">
+          <span class="pill method">POST</span>
+          <span class="pill auth">x-agent-api-key</span>
+          <span class="pill warn">Not JWT</span>
+        </div>
+        <h4>Headers</h4>
+        <pre>x-agent-api-key: seed-agent-delhi-key
+Content-Type: application/json</pre>
+        <h4>Body</h4>
+        <pre>{
+  "cpu": "Intel Core i5-1345U",
+  "ram": "16 GB",
+  "storageTotal": "512 GB SSD",
+  "storageUsedPercent": 82,
+  "installedSoftware": ["Chrome", "VS Code", "Slack"]
+}</pre>
+        <h4>Success 200</h4>
+        <pre>{
+  "pollLogId": "p1111111-1111-1111-1111-111111111111",
+  "status": "SUCCESS",
+  "softwareChanges": [{ "softwareName": "Slack", "action": "ADDED" }],
+  "hardwareChanges": [],
+  "storageUsedPercent": 82
+}</pre>
+        <p>If storage ≥ 80% → notification type <code>STORAGE_THRESHOLD</code>.</p>
+      </div>
+      <div class="endpoint">
+        <h3>POST /api/v1/agents/:agentId/deregister</h3>
+        <div class="meta"><span class="pill method">POST</span><span class="pill auth">Agent key</span><span class="pill warn">Rate limit 5/15m</span></div>
+        <pre>{ "adminSecret": "&lt;matches ADMIN_SECRET_PASSWORD_HASH&gt;" }</pre>
+        <pre>{ "agentId": "...", "deregistered": true }</pre>
+      </div>
+    </section>
+
+    <section id="ond">
+      <h2>9. Other Network Devices</h2>
+      <div class="endpoint">
+        <h3>POST /api/v1/other-network-devices</h3>
+        <div class="meta"><span class="pill method">POST</span><span class="pill auth">JWT</span><span class="pill role">OND edit</span></div>
+        <p><strong>Serial rule:</strong> scanned wins over manual when both present.</p>
+        <h4>Body</h4>
+        <pre>{
+  "clientId": "c1111111-1111-1111-1111-111111111111",
+  "type": "KEYBOARD",
+  "name": "Logitech K120",
+  "scannedSerialNumber": "SCAN-999",
+  "manualSerialNumber": "MANUAL-111",
+  "purchaseDate": "2024-06-01",
+  "status": "STOCK",
+  "warrantyStatus": "UNDER_WARRANTY",
+  "warrantyExpiryDate": "2030-01-01"
+}</pre>
+        <h4>Success 201</h4>
+        <pre>{
+  "id": "o9999999-9999-9999-9999-999999999999",
+  "clientId": "c1111111-1111-1111-1111-111111111111",
+  "type": "KEYBOARD",
+  "name": "Logitech K120",
+  "serialNumber": "SCAN-999",
+  "purchaseDate": "2024-06-01T00:00:00.000Z",
+  "status": "STOCK",
+  "attachedDeviceId": null,
+  "warrantyStatus": "UNDER_WARRANTY",
+  "effectiveWarrantyStatus": "UNDER_WARRANTY",
+  "warrantyExpiryDate": "2030-01-01T00:00:00.000Z",
+  "createdAt": "2026-08-20T15:50:00.000Z",
+  "updatedAt": "2026-08-20T15:50:00.000Z"
+}</pre>
+        <p>Past expiry → <code>effectiveWarrantyStatus: "EXPIRED"</code> at read-time (stored enum unchanged).</p>
+      </div>
+      <div class="endpoint">
+        <h3>PATCH /api/v1/other-network-devices/:id/link</h3>
+        <div class="meta"><span class="pill method">PATCH</span><span class="pill auth">JWT</span><span class="pill role">OND edit</span></div>
+        <pre>{ "attachedDeviceId": "d9999999-9999-9999-9999-999999999999" }</pre>
+        <p>Or <code>null</code> to unlink. Then Device GET shows it in <code>linkedOtherNetworkDevices</code>.</p>
+      </div>
+      <p>Also: GET list/by-id, PATCH update, DELETE (admin delete roles).</p>
+    </section>
+
+    <section id="audit">
+      <h2>10. Audit — complete change history</h2>
+      <div class="endpoint">
+        <h3>GET /api/v1/audit-logs</h3>
+        <div class="meta">
+          <span class="pill method">GET</span>
+          <span class="pill auth">JWT</span>
+          <span class="pill role">SUPER_ADMIN · DGN_IT_MANAGER</span>
+        </div>
+        <p>Query: <code>?page=1&amp;pageSize=50&amp;entityType=Device&amp;entityId=&lt;uuid&gt;&amp;action=UPDATE</code></p>
+        <h4>Success 200 — this is the “what changed when” record</h4>
+        <pre>{
+  "items": [{
+    "id": "au111111-1111-1111-1111-111111111111",
+    "entityType": "Device",
+    "entityId": "d9999999-9999-9999-9999-999999999999",
+    "action": "UPDATE",
+    "performedBy": "11111111-1111-1111-1111-111111111111",
+    "before": {
+      "cpu": "Intel Core i5-1345U",
+      "ram": "16 GB",
+      "storageUsedPercent": 12
+    },
+    "after": {
+      "cpu": "Intel Core i7-1355U",
+      "ram": "32 GB",
+      "storageUsedPercent": 44,
+      "fieldChanges": {
+        "cpu": { "from": "Intel Core i5-1345U", "to": "Intel Core i7-1355U" },
+        "ram": { "from": "16 GB", "to": "32 GB" },
+        "storageUsedPercent": { "from": 12, "to": 44 }
+      },
+      "changedAt": "2026-08-20T15:25:00.000Z"
+    },
+    "createdAt": "2026-08-20T15:25:00.120Z"
+  }],
+  "page": 1, "pageSize": 50, "total": 1
+}</pre>
+        <div class="note">
+          Every mutating API emits an AuditableEvent. Audit writes one row with full
+          <code>before</code>/<code>after</code>. UPDATEs always include per-field
+          <code>fieldChanges</code> and <code>changedAt</code>.
+        </div>
+      </div>
+    </section>
+
+    <section id="notif">
+      <h2>11. Notifications</h2>
+      <div class="endpoint">
+        <h3>GET /api/v1/notifications</h3>
+        <div class="meta"><span class="pill method">GET</span><span class="pill auth">JWT</span><span class="pill role">SUPER_ADMIN · DGN_IT_MANAGER</span></div>
+        <pre>{
+  "items": [{
+    "id": "n1111111-1111-1111-1111-111111111111",
+    "deviceId": "d9999999-9999-9999-9999-999999999999",
+    "type": "DEVICE_ALLOTMENT",
+    "recipients": ["priya.nair@client.local", "sameer.kapoor@client.local"],
+    "status": "SENT",
+    "sentAt": "2026-08-20T15:20:05.000Z",
+    "createdAt": "2026-08-20T15:20:00.500Z"
+  }],
+  "page": 1, "pageSize": 50, "total": 1
+}</pre>
+        <p>Types: DEVICE_ALLOTMENT · STORAGE_THRESHOLD · DISCARD_WARNING.<br/>
+        Status: PENDING · SENT · FAILED. Email is never sent inside the HTTP handler — only via BullMQ.</p>
+      </div>
+    </section>
+
+    <section id="errors">
+      <h2>12. Error envelope (every API)</h2>
+      <pre>{ "error": { "code": "FORBIDDEN", "message": "Human readable explanation", "details": {} } }</pre>
+      <table>
+        <thead><tr><th>HTTP</th><th>code</th></tr></thead>
+        <tbody>
+          <tr><td>400</td><td>VALIDATION_ERROR</td></tr>
+          <tr><td>401</td><td>UNAUTHORIZED</td></tr>
+          <tr><td>403</td><td>FORBIDDEN</td></tr>
+          <tr><td>404</td><td>NOT_FOUND</td></tr>
+          <tr><td>409</td><td>CONFLICT</td></tr>
+          <tr><td>429</td><td>RATE_LIMITED</td></tr>
+          <tr><td>500</td><td>INTERNAL_ERROR</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="jobs">
+      <h2>13. Background jobs</h2>
+      <p>Daily 03:00 UTC (<code>lifecycle-sweep</code>):</p>
+      <ol>
+        <li>Hard-delete DISCARDED past <code>deletionDueAt</code> (emit <code>device.deleted</code> first for Audit).</li>
+        <li>Warn devices ~15 days out once (<code>discardWarningSentAt</code> idempotency).</li>
+      </ol>
+    </section>
+
+    <section id="seed">
+      <h2>14. Seed cheat-sheet</h2>
+      <table>
+        <tr><th>Password (all)</th><td>Password123!</td></tr>
+        <tr><th>Agent API key</th><td>seed-agent-delhi-key</td></tr>
+        <tr><th>Devices</th><td>15 tags DEL-LN-00101 … BLR-LN-00305</td></tr>
+        <tr><th>Clients</th><td>CRL Delhi / Mumbai / Bengaluru</td></tr>
+        <tr><th>OpenAPI</th><td>/docs</td></tr>
+        <tr><th>Postman</th><td>docs/postman/Inventory-Backend.postman_collection.json</td></tr>
+      </table>
+    </section>
+
+    <section id="curl">
+      <h2>15. Quick curl recipe</h2>
+      <pre>TOKEN=$(curl -s -X POST http://localhost:4000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"super.admin@inventory.local","password":"Password123!"}' \
+  | jq -r .token)
+
+curl -s http://localhost:4000/api/v1/clients -H "Authorization: Bearer $TOKEN" | jq
+curl -s 'http://localhost:4000/api/v1/devices?pageSize=5' -H "Authorization: Bearer $TOKEN" | jq
+curl -s 'http://localhost:4000/api/v1/audit-logs?pageSize=10' -H "Authorization: Bearer $TOKEN" | jq</pre>
+    </section>
+  </main>
+</div>
+</body>
+</html>

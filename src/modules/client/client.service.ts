@@ -58,6 +58,27 @@ export class ClientService {
     return { items, page: query.page, pageSize: query.pageSize, total };
   }
 
+  async getClient(clientId: string, actor: { userId: string; role: AppUserRole }) {
+    const client = await this.clientRepository.findWithLocations(clientId);
+    if (!client) {
+      throw new NotFoundError("Client not found");
+    }
+
+    if (!UNSCOPED_ROLES.has(actor.role)) {
+      if (actor.role === AppUserRole.IT_ENGINEER) {
+        const assigned = await this.clientRepository.listActiveAssignedClientIds(actor.userId);
+        if (!assigned.includes(clientId)) {
+          throw new NotFoundError("Client not found");
+        }
+      } else {
+        throw new NotFoundError("Client not found");
+      }
+    }
+
+    const engineers = await this.clientRepository.listActiveEngineers(clientId);
+    return { ...client, engineers };
+  }
+
   /**
    * FR-MOVE-01 — intra-client location change. Updates currentLocation and
    * appends a SiteLocation with isCurrent flipped. Does not touch Device.

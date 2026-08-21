@@ -26,16 +26,16 @@ describe("diffTelemetry", () => {
       name: "detects software added and removed",
       poll: { installedSoftware: ["Chrome", "Slack"] } satisfies PollPayload,
       software: [
-        { softwareName: "Slack", action: SoftwareChangeAction.ADDED },
-        { softwareName: "Zoom", action: SoftwareChangeAction.REMOVED },
+        { softwareName: "Slack", version: null, action: SoftwareChangeAction.ADDED },
+        { softwareName: "Zoom", version: null, action: SoftwareChangeAction.REMOVED },
       ],
     },
     {
       name: "accepts { name } software objects",
       poll: { installedSoftware: [{ name: "Chrome" }, { name: "Teams" }] } satisfies PollPayload,
       software: [
-        { softwareName: "Teams", action: SoftwareChangeAction.ADDED },
-        { softwareName: "Zoom", action: SoftwareChangeAction.REMOVED },
+        { softwareName: "Teams", version: null, action: SoftwareChangeAction.ADDED },
+        { softwareName: "Zoom", version: null, action: SoftwareChangeAction.REMOVED },
       ],
     },
     {
@@ -111,7 +111,23 @@ describe("diffTelemetry", () => {
   it("treats missing previous software as empty", () => {
     const empty: DeviceTelemetry = { ...previous, installedSoftware: null };
     const diff = diffTelemetry(empty, { installedSoftware: ["Chrome"] });
-    expect(diff.softwareChanges).toEqual([{ softwareName: "Chrome", action: SoftwareChangeAction.ADDED }]);
+    expect(diff.softwareChanges).toEqual([
+      { softwareName: "Chrome", version: null, action: SoftwareChangeAction.ADDED },
+    ]);
+  });
+
+  it("treats software version upgrades as remove + add with version column", () => {
+    const withVersion: DeviceTelemetry = {
+      ...previous,
+      installedSoftware: [{ name: "Google Chrome", version: "121.0.0" }],
+    };
+    const diff = diffTelemetry(withVersion, {
+      installedSoftware: [{ name: "Google Chrome", version: "122.0.0" }],
+    });
+    expect(diff.softwareChanges).toEqual([
+      { softwareName: "Google Chrome", version: "121.0.0", action: SoftwareChangeAction.REMOVED },
+      { softwareName: "Google Chrome", version: "122.0.0", action: SoftwareChangeAction.ADDED },
+    ]);
   });
 });
 
@@ -174,6 +190,19 @@ describe("mergeTelemetry", () => {
 
   it("keeps storageUsedPercent 0", () => {
     expect(mergeTelemetry(previous, { storageUsedPercent: 0 })).toEqual({ storageUsedPercent: 0 });
+  });
+
+  it("normalizes installed software to name+version objects", () => {
+    expect(
+      mergeTelemetry(previous, {
+        installedSoftware: [{ name: "Google Chrome", version: "122.0" }, "Zoom"],
+      }),
+    ).toEqual({
+      installedSoftware: [
+        { name: "Google Chrome", version: "122.0" },
+        { name: "Zoom", version: null },
+      ],
+    });
   });
 });
 

@@ -42,6 +42,10 @@ export interface ClientRepository {
   findAppUserById(id: string): Promise<AppUserLookup | null>;
   findActiveEngineerAssignment(clientId: string, appUserId: string): Promise<EngineerAssignmentRecord | null>;
   listActiveAssignedClientIds(appUserId: string): Promise<string[]>;
+  listActiveEngineers(clientId: string): Promise<
+    Array<EngineerAssignmentRecord & { user: { id: string; name: string; email: string; role: string } }>
+  >;
+  findWithLocations(id: string): Promise<ClientWithLocations | null>;
   createEngineerAssignment(clientId: string, appUserId: string): Promise<EngineerAssignmentRecord>;
   offboardEngineerAssignment(assignmentId: string, unassignedAt: Date): Promise<EngineerAssignmentRecord>;
 }
@@ -135,6 +139,30 @@ export class PrismaClientRepository implements ClientRepository {
       select: { clientId: true },
     });
     return rows.map((row) => row.clientId);
+  }
+
+  async findWithLocations(id: string): Promise<ClientWithLocations | null> {
+    return this.prisma.client.findUnique({
+      where: { id },
+      select: {
+        ...clientSelect,
+        locations: { select: siteLocationSelect, orderBy: { changedAt: "asc" } },
+      },
+    });
+  }
+
+  async listActiveEngineers(
+    clientId: string,
+  ): Promise<Array<EngineerAssignmentRecord & { user: { id: string; name: string; email: string; role: string } }>> {
+    const rows = await this.prisma.engineerAssignment.findMany({
+      where: { clientId, isActive: true },
+      select: {
+        ...engineerAssignmentSelect,
+        appUser: { select: { id: true, name: true, email: true, role: true } },
+      },
+      orderBy: { assignedAt: "desc" },
+    });
+    return rows.map(({ appUser, ...rest }) => ({ ...rest, user: appUser }));
   }
 
   async createEngineerAssignment(clientId: string, appUserId: string): Promise<EngineerAssignmentRecord> {

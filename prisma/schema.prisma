@@ -315,6 +315,8 @@ model DeviceSoftwareEvent {
   deviceId     String               @map("device_id")
   pollLogId    String?              @map("poll_log_id")
   softwareName String               @map("software_name")
+  /// Explicit version string (nullable for legacy rows / name-only agents).
+  version      String?              @map("version")
   action       SoftwareChangeAction
   detectedAt   DateTime             @default(now()) @map("detected_at")
 
@@ -420,4 +422,14 @@ model Notification {
 
   @@index([status])
   @@map("notifications")
+}
+
+/// Key/value system config (e.g. rbac_matrix overrides editable by SUPER_ADMIN).
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  @@map("system_settings")
 }

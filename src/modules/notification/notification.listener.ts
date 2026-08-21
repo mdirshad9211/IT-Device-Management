@@ -1,5 +1,4 @@
 import { NotificationType } from "@prisma/client";
-import type { Queue } from "bullmq";
 import type { DomainEventBus } from "../../shared/kernel/events";
 import { createQueue } from "../../shared/kernel/queue";
 import type { NotificationRepository } from "./notification.repository";
@@ -7,9 +6,6 @@ import type { NotificationJobPayload } from "./notification.schemas";
 
 const DEFAULT_JOB_OPTS = {
   attempts: 5,
-  backoff: { type: "exponential" as const, delay: 2000 },
-  removeOnComplete: 100,
-  removeOnFail: 200,
 };
 
 /**
@@ -17,13 +13,12 @@ const DEFAULT_JOB_OPTS = {
  * notification jobs. Never sends email synchronously in the handler.
  */
 export class NotificationListener {
-  private readonly queue: Queue<NotificationJobPayload>;
+  private readonly queue = createQueue<NotificationJobPayload>("notifications");
 
   constructor(
     private readonly eventBus: DomainEventBus,
     private readonly notificationRepository: NotificationRepository,
   ) {
-    this.queue = createQueue<NotificationJobPayload>("notifications");
     this.register();
   }
 

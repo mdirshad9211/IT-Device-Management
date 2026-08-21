@@ -1,6 +1,6 @@
 # Inventory Management Module — Backend
 
-Fastify + TypeScript + PostgreSQL (Prisma) + Redis/BullMQ, modular monolith.
+Fastify + TypeScript + PostgreSQL (Prisma), modular monolith.
 
 ## Current status: business modules implemented
 
@@ -12,7 +12,7 @@ UI lives at `/docs`.
 ## Prerequisites
 
 - Node.js 20+
-- Docker (for local Postgres + Redis)
+- Docker (for local Postgres)
 
 ## Setup
 
@@ -33,7 +33,7 @@ Server: `http://localhost:4000`
 
 ```bash
 curl http://localhost:4000/health
-# { "status":"ok","db":"ok","redis":"ok","docs":"/docs", ... }
+# { "status":"ok","db":"ok","docs":"/docs", ... }
 
 open http://localhost:4000/docs
 ```
@@ -60,9 +60,9 @@ Integration suites skip gracefully when `postgres-test` (port 5433) is down.
 | Agent poll / download token / deregister | Done |
 | QR generate (1:1), image, resolve, run-poll | Done |
 | Other Network Devices + link to Device | Done |
-| Notifications (queue + nodemailer worker) | Done |
+| Notifications (in-process queue + nodemailer) | Done |
 | Audit (every mutation → AuditLog + fieldChanges) | Done |
-| Lifecycle sweep job (warn + hard-delete) | Done |
+| Lifecycle sweep (in-process daily timer) | Done |
 | OpenAPI (`/docs`) from zod schemas | Done |
 
 ## What's NOT here yet
@@ -81,7 +81,7 @@ src/
 ├── shared/kernel/   # errors, events, prisma, queue, rbac, logger
 ├── shared/http/     # error-handler, swagger, pagination
 ├── modules/         # auth, client, device, agent, qr, ond, notification, audit, user-management
-├── jobs/            # BullMQ wiring (lifecycle-sweep)
+├── jobs/            # In-process lifecycle-sweep timer
 └── types/
 prisma/              # schema, migrations, seed.ts
 tests/               # unit + integration

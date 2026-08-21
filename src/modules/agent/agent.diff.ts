@@ -25,7 +25,11 @@ export type PollPayload = {
   error?: { type?: string; code?: string; message?: string };
 };
 
-export type SoftwareChange = { softwareName: string; action: SoftwareChangeAction };
+export type SoftwareChange = {
+  softwareName: string;
+  version: string | null;
+  action: SoftwareChangeAction;
+};
 export type HardwareChange = {
   changeType: HardwareChangeType;
   previousValue: unknown;
@@ -117,47 +121,83 @@ export function mergeTelemetry(previous: DeviceTelemetry, poll: PollPayload): Pa
   if (poll.soundCards !== undefined && poll.soundCards !== null) next.soundCards = poll.soundCards;
   if (poll.connectedDevices !== undefined && poll.connectedDevices !== null) next.connectedDevices = poll.connectedDevices;
   if (poll.installedSoftware !== undefined && poll.installedSoftware !== null) {
-    next.installedSoftware = normalizeSoftware(poll.installedSoftware);
+    next.installedSoftware = normalizeSoftwareEntries(poll.installedSoftware);
   }
   return next;
 }
 
-function diffSoftware(previous: unknown, next: unknown): SoftwareChange[] {
-  const prevSet = new Set(normalizeSoftware(previous));
-  const nextSet = new Set(normalizeSoftware(next));
-  const changes: SoftwareChange[] = [];
+type SoftwareEntry = { name: string; version: string | null };
 
-  for (const name of nextSet) {
-    if (!prevSet.has(name)) {
-      changes.push({ softwareName: name, action: SoftwareChangeAction.ADDED });
-    }
-  }
-  for (const name of prevSet) {
-    if (!nextSet.has(name)) {
-      changes.push({ softwareName: name, action: SoftwareChangeAction.REMOVED });
-    }
-  }
-  return changes.sort((a, b) => a.softwareName.localeCompare(b.softwareName) || a.action.localeCompare(b.action));
+function softwareKey(entry: SoftwareEntry): string {
+  return `${entry.name}@@${entry.version ?? ""}`;
 }
 
-function normalizeSoftware(value: unknown): string[] {
+function diffSoftware(previous: unknown, next: unknown): SoftwareChange[] {
+  const prevEntries = normalizeSoftwareEntries(previous);
+  const nextEntries = normalizeSoftwareEntries(next);
+  const prevMap = new Map(prevEntries.map((e) => [softwareKey(e), e]));
+  const nextMap = new Map(nextEntries.map((e) => [softwareKey(e), e]));
+  const changes: SoftwareChange[] = [];
+
+  for (const [key, entry] of nextMap) {
+    if (!prevMap.has(key)) {
+      changes.push({
+        softwareName: entry.name,
+        version: entry.version,
+        action: SoftwareChangeAction.ADDED,
+      });
+    }
+  }
+  for (const [key, entry] of prevMap) {
+    if (!nextMap.has(key)) {
+      changes.push({
+        softwareName: entry.name,
+        version: entry.version,
+        action: SoftwareChangeAction.REMOVED,
+      });
+    }
+  }
+  return changes.sort(
+    (a, b) =>
+      a.softwareName.localeCompare(b.softwareName) ||
+      (a.version ?? "").localeCompare(b.version ?? "") ||
+      a.action.localeCompare(b.action),
+  );
+}
+
+/** Normalize agent/UI payloads into `{ name, version }` for Device.installedSoftware. */
+export function normalizeSoftwareEntries(value: unknown): SoftwareEntry[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  const names: string[] = [];
+  const entries: SoftwareEntry[] = [];
+  const seen = new Set<string>();
   for (const item of value) {
+    let name = "";
+    let version: string | null = null;
     if (typeof item === "string" && item.trim() !== "") {
-      names.push(item.trim());
+      const match = item.trim().match(/^(.*)\sv(\S+)$/);
+      if (match) {
+        name = match[1]!.trim();
+        version = match[2]!;
+      } else {
+        name = item.trim();
+      }
+    } else if (item && typeof item === "object" && "name" in item) {
+      const rawName = (item as { name: unknown }).name;
+      if (typeof rawName !== "string" || rawName.trim() === "") continue;
+      name = rawName.trim();
+      const versionRaw = (item as { version?: unknown }).version;
+      version = typeof versionRaw === "string" && versionRaw.trim() ? versionRaw.trim() : null;
+    } else {
       continue;
     }
-    if (item && typeof item === "object" && "name" in item) {
-      const name = (item as { name: unknown }).name;
-      if (typeof name === "string" && name.trim() !== "") {
-        names.push(name.trim());
-      }
-    }
+    const key = softwareKey({ name, version });
+    if (seen.has(key)) continue;
+    seen.add(key);
+    entries.push({ name, version });
   }
-  return [...new Set(names)];
+  return entries;
 }
 
 function pushHardware(

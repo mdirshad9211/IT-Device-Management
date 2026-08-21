@@ -4,6 +4,7 @@ import {
   assignEngineerBodySchema,
   clientIdParamsSchema,
   clientWithLocationsSchema,
+  clientDetailSchema,
   createClientBodySchema,
   engineerAssignmentSchema,
   listClientsQuerySchema,
@@ -23,6 +24,15 @@ export class ClientController {
       role: request.user.role,
     });
     return reply.status(200).send(listClientsResponseSchema.parse(result));
+  }
+
+  async get(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = parseParams(clientIdParamsSchema, request);
+    const client = await this.clientService.getClient(id, {
+      userId: request.user.userId,
+      role: request.user.role,
+    });
+    return reply.status(200).send(clientDetailSchema.parse(client));
   }
 
   async create(request: FastifyRequest, reply: FastifyReply) {

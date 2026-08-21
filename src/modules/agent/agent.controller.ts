@@ -5,12 +5,15 @@ import {
   agentIdParamsSchema,
   deregisterBodySchema,
   deregisterResponseSchema,
+  deviceIdForPollsParamsSchema,
   downloadAgentQuerySchema,
   downloadAgentResponseSchema,
+  listPollLogsResponseSchema,
   pollBodySchema,
   pollResponseSchema,
 } from "./agent.schemas";
 import type { AgentService } from "./agent.service";
+import { paginationSchema } from "../../shared/http/schemas/pagination";
 
 function requireCaller(request: FastifyRequest) {
   if (!request.agent) {
@@ -43,5 +46,15 @@ export class AgentController {
       role: request.user.role,
     });
     return reply.status(200).send(downloadAgentResponseSchema.parse(result));
+  }
+
+  async listPollLogs(request: FastifyRequest, reply: FastifyReply) {
+    const { deviceId } = parseParams(deviceIdForPollsParamsSchema, request);
+    const query = parseQuery(paginationSchema, request);
+    const result = await this.agentService.listPollLogs(deviceId, query, {
+      userId: request.user.userId,
+      role: request.user.role,
+    });
+    return reply.status(200).send(listPollLogsResponseSchema.parse(result));
   }
 }

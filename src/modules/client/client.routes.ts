@@ -18,6 +18,11 @@ export default async function clientRoutes(fastify: FastifyInstance): Promise<vo
     return controller.list(request, reply);
   });
 
+  fastify.get("/:id", viewClient, async (request, reply) => {
+    const controller = request.container.resolve<ClientController>("clientController");
+    return controller.get(request, reply);
+  });
+
   fastify.post("/", editClient, async (request, reply) => {
     const controller = request.container.resolve<ClientController>("clientController");
     return controller.create(request, reply);

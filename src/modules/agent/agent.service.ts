@@ -170,6 +170,38 @@ export class AgentService {
     return { agentId, deregistered: true as const };
   }
 
+  async listPollLogs(
+    deviceId: string,
+    query: { page: number; pageSize: number },
+    actor: AppActor,
+  ) {
+    const device = await this.agentRepository.findDeviceTelemetry(deviceId);
+    if (!device) {
+      throw new NotFoundError("Device not found");
+    }
+    const assigned =
+      actor.role === AppUserRole.IT_ENGINEER
+        ? await this.agentRepository.listActiveAssignedClientIds(actor.userId)
+        : [];
+    enforceAccess({
+      actorUserId: actor.userId,
+      role: actor.role,
+      entity: "Device",
+      action: "view",
+      targetClientId: device.clientId,
+      activeAssignedClientIds: assigned,
+      currentAssignment: null,
+    });
+
+    const skip = (query.page - 1) * query.pageSize;
+    const { items, total } = await this.agentRepository.listPollLogsForDevice(
+      deviceId,
+      skip,
+      query.pageSize,
+    );
+    return { items, page: query.page, pageSize: query.pageSize, total };
+  }
+
   private assertAgentCaller(agentId: string, caller: AuthenticatedAgent): void {
     if (caller.id !== agentId) {
       throw new UnauthorizedError("Agent API key does not match this agent");

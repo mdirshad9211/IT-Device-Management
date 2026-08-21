@@ -9,8 +9,6 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   TEST_DATABASE_URL: z.string().optional(),
 
-  REDIS_URL: z.string().min(1, "REDIS_URL is required"),
-
   JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 characters"),
   AGENT_JWT_SECRET: z.string().min(16, "AGENT_JWT_SECRET must be at least 16 characters"),
   ADMIN_SECRET_PASSWORD_HASH: z.string().min(1, "ADMIN_SECRET_PASSWORD_HASH is required"),

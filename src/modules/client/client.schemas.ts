@@ -65,3 +65,16 @@ export const engineerAssignmentSchema = z.object({
   assignedAt: z.coerce.date(),
   unassignedAt: z.coerce.date().nullable(),
 });
+
+export const engineerWithUserSchema = engineerAssignmentSchema.extend({
+  user: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    email: z.string().email(),
+    role: z.string(),
+  }),
+});
+
+export const clientDetailSchema = clientWithLocationsSchema.extend({
+  engineers: z.array(engineerWithUserSchema),
+});

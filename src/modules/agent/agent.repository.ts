@@ -26,6 +26,21 @@ export interface AgentRepository {
   listDeviceContactEmails(deviceId: string): Promise<string[]>;
   commitPoll(input: PollCommitInput): Promise<{ pollLogId: string }>;
   deregister(agentId: string): Promise<void>;
+  listPollLogsForDevice(
+    deviceId: string,
+    skip: number,
+    take: number,
+  ): Promise<{
+    items: Array<{
+      id: string;
+      agentId: string;
+      status: PollStatus;
+      isStale: boolean;
+      polledAt: Date;
+      payload: unknown;
+    }>;
+    total: number;
+  }>;
 }
 
 export class PrismaAgentRepository implements AgentRepository {
@@ -119,6 +134,7 @@ export class PrismaAgentRepository implements AgentRepository {
             deviceId: input.deviceId,
             pollLogId: log.id,
             softwareName: change.softwareName,
+            version: change.version,
             action: change.action as SoftwareChangeAction,
             detectedAt: input.now,
           })),
@@ -160,6 +176,49 @@ export class PrismaAgentRepository implements AgentRepository {
       }
       await tx.agent.delete({ where: { id: agentId } });
     });
+  }
+
+  async listPollLogsForDevice(
+    deviceId: string,
+    skip: number,
+    take: number,
+  ): Promise<{
+    items: Array<{
+      id: string;
+      agentId: string;
+      status: PollStatus;
+      isStale: boolean;
+      polledAt: Date;
+      payload: unknown;
+    }>;
+    total: number;
+  }> {
+    const agent = await this.prisma.agent.findUnique({
+      where: { deviceId },
+      select: { id: true },
+    });
+    if (!agent) {
+      return { items: [], total: 0 };
+    }
+    const where = { agentId: agent.id };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.agentPollLog.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { polledAt: "desc" },
+        select: {
+          id: true,
+          agentId: true,
+          status: true,
+          isStale: true,
+          polledAt: true,
+          payload: true,
+        },
+      }),
+      this.prisma.agentPollLog.count({ where }),
+    ]);
+    return { items, total };
   }
 }
 

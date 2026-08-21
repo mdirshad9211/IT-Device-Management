@@ -21,7 +21,7 @@ describe("app boilerplate smoke test", () => {
     const body = res.json();
     expect(body).toHaveProperty("status");
     expect(body).toHaveProperty("db");
-    expect(body).toHaveProperty("redis");
+    expect(body).not.toHaveProperty("redis");
   });
 
   it("GET /api/v1/notifications without a JWT is 401, not a stub payload", async () => {

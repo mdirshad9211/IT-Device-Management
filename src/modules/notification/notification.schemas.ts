@@ -25,7 +25,7 @@ export const listNotificationsResponseSchema = z.object({
   total: z.number().int(),
 });
 
-/** BullMQ job payload for the notifications queue. */
+/** In-process job payload for the notifications queue. */
 export type NotificationJobPayload = {
   notificationId: string;
   type: NotificationType;

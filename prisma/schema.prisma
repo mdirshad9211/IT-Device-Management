@@ -37,6 +37,7 @@ enum PollStatus {
 enum SoftwareChangeAction {
   ADDED
   REMOVED
+  UPDATED
 }
 
 enum HardwareChangeType {

@@ -52,6 +52,42 @@ describe("diffTelemetry", () => {
     expect(diffTelemetry(previous, poll).softwareChanges).toEqual(software);
   });
 
+  it("treats name-only then versioned as UPDATED once", () => {
+    const prev: DeviceTelemetry = {
+      ...previous,
+      installedSoftware: [{ name: "Brave" }],
+    };
+    const poll: PollPayload = {
+      installedSoftware: [{ name: "Brave", version: "151.1.93.138" }],
+    };
+    expect(diffTelemetry(prev, poll).softwareChanges).toEqual([
+      {
+        softwareName: "Brave",
+        version: "151.1.93.138",
+        previousVersion: null,
+        action: SoftwareChangeAction.UPDATED,
+      },
+    ]);
+  });
+
+  it("treats software version upgrades as UPDATED", () => {
+    const withVersion: DeviceTelemetry = {
+      ...previous,
+      installedSoftware: [{ name: "Google Chrome", version: "121.0.0" }],
+    };
+    const diff = diffTelemetry(withVersion, {
+      installedSoftware: [{ name: "Google Chrome", version: "122.0.0" }],
+    });
+    expect(diff.softwareChanges).toEqual([
+      {
+        softwareName: "Google Chrome",
+        version: "122.0.0",
+        previousVersion: "121.0.0",
+        action: SoftwareChangeAction.UPDATED,
+      },
+    ]);
+  });
+
   it.each([
     {
       name: "RAM",
@@ -92,6 +128,14 @@ describe("diffTelemetry", () => {
     expect(diffTelemetry(previous, poll).hardwareChanges).toEqual([{ changeType, previousValue, newValue }]);
   });
 
+  it("ignores cosmetic storage text when GB matches", () => {
+    expect(
+      diffTelemetry(previous, { storageTotal: "512 GB SSD" }).hardwareChanges.filter(
+        (h) => h.changeType === HardwareChangeType.STORAGE,
+      ),
+    ).toEqual([]);
+  });
+
   it("does not emit hardware changes for omitted fields", () => {
     expect(diffTelemetry(previous, { storageUsedPercent: 50 }).hardwareChanges).toEqual([]);
   });
@@ -113,20 +157,6 @@ describe("diffTelemetry", () => {
     const diff = diffTelemetry(empty, { installedSoftware: ["Chrome"] });
     expect(diff.softwareChanges).toEqual([
       { softwareName: "Chrome", version: null, action: SoftwareChangeAction.ADDED },
-    ]);
-  });
-
-  it("treats software version upgrades as remove + add with version column", () => {
-    const withVersion: DeviceTelemetry = {
-      ...previous,
-      installedSoftware: [{ name: "Google Chrome", version: "121.0.0" }],
-    };
-    const diff = diffTelemetry(withVersion, {
-      installedSoftware: [{ name: "Google Chrome", version: "122.0.0" }],
-    });
-    expect(diff.softwareChanges).toEqual([
-      { softwareName: "Google Chrome", version: "121.0.0", action: SoftwareChangeAction.REMOVED },
-      { softwareName: "Google Chrome", version: "122.0.0", action: SoftwareChangeAction.ADDED },
     ]);
   });
 });
@@ -192,15 +222,21 @@ describe("mergeTelemetry", () => {
     expect(mergeTelemetry(previous, { storageUsedPercent: 0 })).toEqual({ storageUsedPercent: 0 });
   });
 
-  it("normalizes installed software to name+version objects", () => {
+  it("normalizes installed software to rich objects", () => {
     expect(
       mergeTelemetry(previous, {
         installedSoftware: [{ name: "Google Chrome", version: "122.0" }, "Zoom"],
       }),
     ).toEqual({
       installedSoftware: [
-        { name: "Google Chrome", version: "122.0" },
-        { name: "Zoom", version: null },
+        {
+          name: "Google Chrome",
+          version: "122.0",
+          productKey: null,
+          installedAt: null,
+          updatedAt: null,
+        },
+        { name: "Zoom", version: null, productKey: null, installedAt: null, updatedAt: null },
       ],
     });
   });

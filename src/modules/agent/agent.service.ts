@@ -1,9 +1,11 @@
+import { randomBytes } from "node:crypto";
 import bcrypt from "bcrypt";
 import { AppUserRole, AuditAction, PollStatus, Prisma } from "@prisma/client";
 import { ForbiddenError, NotFoundError, UnauthorizedError } from "../../shared/kernel/errors";
 import type { DomainEventBus } from "../../shared/kernel/events";
 import { enforceAccess } from "../../shared/kernel/rbac";
 import { env } from "../../config/env";
+import { hashAgentApiKey } from "../auth/agent-api-key";
 import {
   classifyPollStatus,
   diffTelemetry,
@@ -13,6 +15,8 @@ import {
 } from "./agent.diff";
 import type { AgentRepository } from "./agent.repository";
 import { signAgentDownloadToken } from "./agent.download-token";
+import { agentPackageFileName, buildAgentInstallerPackage } from "./agent.package";
+import { collectLocalTelemetry } from "./agent.local-collect";
 
 export type AppActor = { userId: string; role: AppUserRole };
 export type AuthenticatedAgent = { id: string; deviceId: string; clientId: string };
@@ -97,12 +101,16 @@ export class AgentService {
   }
 
   /**
-   * Issues a short-lived, site-scoped download token for the agent installer.
-   * Does not email; Notification listens on other events.
+   * Issues a short-lived, site-scoped download token and builds the agent
+   * installer ZIP (scripts + config) for the ops UI download button.
    */
-  async issueDownloadToken(clientId: string, actor: AppActor) {
-    const exists = await this.agentRepository.clientExists(clientId);
-    if (!exists) {
+  async issueDownloadToken(
+    clientId: string,
+    actor: AppActor,
+    opts: { apiBaseUrl: string },
+  ) {
+    const client = await this.agentRepository.getClientSummary(clientId);
+    if (!client) {
       throw new NotFoundError("Client not found");
     }
 
@@ -122,20 +130,53 @@ export class AgentService {
     });
 
     const { token, expiresAt } = signAgentDownloadToken(clientId);
+    const expiresAtIso = expiresAt.toISOString();
     this.eventBus.emit("agent.download_token.issued", {
       entityType: "Client",
       entityId: clientId,
       action: AuditAction.UPDATE,
       performedBy: actor.userId,
       before: null,
-      after: { downloadTokenIssued: true, expiresAt: expiresAt.toISOString() },
+      after: { downloadTokenIssued: true, expiresAt: expiresAtIso },
       clientId,
     });
+
+    const devices = await this.agentRepository.listClientDevices(clientId);
+    const credentials = [];
+    for (const device of devices) {
+      const apiKey = `dcn_${randomBytes(24).toString("base64url")}`;
+      const agent = await this.agentRepository.upsertAgentApiKey({
+        deviceId: device.id,
+        clientId: client.id,
+        apiKeyHash: hashAgentApiKey(apiKey),
+        version: "1.1.0",
+      });
+      credentials.push({
+        deviceId: device.id,
+        assetTag: device.assetTag,
+        agentId: agent.id,
+        apiKey,
+      });
+    }
+
+    const zip = buildAgentInstallerPackage({
+      clientId: client.id,
+      clientName: client.name,
+      apiBaseUrl: opts.apiBaseUrl,
+      downloadToken: token,
+      expiresAt: expiresAtIso,
+      credentials,
+    });
+
     return {
-      clientId,
+      clientId: client.id,
+      clientName: client.name,
       token,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: expiresAtIso,
       tokenType: "agent-download" as const,
+      fileName: agentPackageFileName(client.name),
+      agentCount: credentials.length,
+      zip,
     };
   }
 
@@ -200,6 +241,51 @@ export class AgentService {
       query.pageSize,
     );
     return { items, page: query.page, pageSize: query.pageSize, total };
+  }
+
+  /**
+   * UI "Scan now": collect telemetry from this host and ingest it as the
+   * device's registered agent (lab / same-machine workflow).
+   */
+  async scanDeviceNow(deviceId: string, actor: AppActor) {
+    const device = await this.agentRepository.findDeviceTelemetry(deviceId);
+    if (!device) {
+      throw new NotFoundError("Device not found");
+    }
+
+    const assigned =
+      actor.role === AppUserRole.IT_ENGINEER
+        ? await this.agentRepository.listActiveAssignedClientIds(actor.userId)
+        : [];
+    enforceAccess({
+      actorUserId: actor.userId,
+      role: actor.role,
+      entity: "Device",
+      action: "edit",
+      targetClientId: device.clientId,
+      activeAssignedClientIds: assigned,
+      currentAssignment: null,
+    });
+
+    const agent = await this.agentRepository.findByDeviceId(deviceId);
+    if (!agent) {
+      throw new NotFoundError("No agent is registered for this device — allot/provision an agent first");
+    }
+
+    const payload = await collectLocalTelemetry();
+    const result = await this.ingestPoll(
+      agent.id,
+      { id: agent.id, deviceId: agent.deviceId, clientId: agent.clientId },
+      payload,
+    );
+
+    return {
+      deviceId,
+      agentId: agent.id,
+      scannedAt: new Date().toISOString(),
+      source: "ui-local-scan" as const,
+      ...result,
+    };
   }
 
   private assertAgentCaller(agentId: string, caller: AuthenticatedAgent): void {

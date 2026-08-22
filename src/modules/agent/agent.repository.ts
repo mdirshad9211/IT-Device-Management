@@ -20,8 +20,17 @@ export type PollCommitInput = {
 
 export interface AgentRepository {
   findById(id: string): Promise<AgentRecord | null>;
+  findByDeviceId(deviceId: string): Promise<AgentRecord | null>;
+  listClientDevices(clientId: string): Promise<Array<{ id: string; assetTag: string }>>;
+  upsertAgentApiKey(input: {
+    deviceId: string;
+    clientId: string;
+    apiKeyHash: string;
+    version: string;
+  }): Promise<AgentRecord>;
   findDeviceTelemetry(deviceId: string): Promise<(DeviceTelemetry & { id: string; clientId: string }) | null>;
   clientExists(clientId: string): Promise<boolean>;
+  getClientSummary(clientId: string): Promise<{ id: string; name: string } | null>;
   listActiveAssignedClientIds(appUserId: string): Promise<string[]>;
   listDeviceContactEmails(deviceId: string): Promise<string[]>;
   commitPoll(input: PollCommitInput): Promise<{ pollLogId: string }>;
@@ -38,6 +47,16 @@ export interface AgentRepository {
       isStale: boolean;
       polledAt: Date;
       payload: unknown;
+      softwareChanges: Array<{
+        softwareName: string;
+        version: string | null;
+        action: SoftwareChangeAction;
+      }>;
+      hardwareChanges: Array<{
+        changeType: HardwareChangeType;
+        previousValue: unknown;
+        newValue: unknown;
+      }>;
     }>;
     total: number;
   }>;
@@ -49,6 +68,44 @@ export class PrismaAgentRepository implements AgentRepository {
   async findById(id: string): Promise<AgentRecord | null> {
     return this.prisma.agent.findUnique({
       where: { id },
+      select: { id: true, deviceId: true, clientId: true, version: true, lastPollAt: true, lastPollStatus: true },
+    });
+  }
+
+  async findByDeviceId(deviceId: string): Promise<AgentRecord | null> {
+    return this.prisma.agent.findUnique({
+      where: { deviceId },
+      select: { id: true, deviceId: true, clientId: true, version: true, lastPollAt: true, lastPollStatus: true },
+    });
+  }
+
+  async listClientDevices(clientId: string): Promise<Array<{ id: string; assetTag: string }>> {
+    return this.prisma.device.findMany({
+      where: { clientId, status: { not: "DELETED" } },
+      select: { id: true, assetTag: true },
+      orderBy: { assetTag: "asc" },
+    });
+  }
+
+  async upsertAgentApiKey(input: {
+    deviceId: string;
+    clientId: string;
+    apiKeyHash: string;
+    version: string;
+  }): Promise<AgentRecord> {
+    return this.prisma.agent.upsert({
+      where: { deviceId: input.deviceId },
+      create: {
+        deviceId: input.deviceId,
+        clientId: input.clientId,
+        apiKeyHash: input.apiKeyHash,
+        version: input.version,
+      },
+      update: {
+        apiKeyHash: input.apiKeyHash,
+        version: input.version,
+        clientId: input.clientId,
+      },
       select: { id: true, deviceId: true, clientId: true, version: true, lastPollAt: true, lastPollStatus: true },
     });
   }
@@ -74,6 +131,13 @@ export class PrismaAgentRepository implements AgentRepository {
   async clientExists(clientId: string): Promise<boolean> {
     const row = await this.prisma.client.findUnique({ where: { id: clientId }, select: { id: true } });
     return row !== null;
+  }
+
+  async getClientSummary(clientId: string): Promise<{ id: string; name: string } | null> {
+    return this.prisma.client.findUnique({
+      where: { id: clientId },
+      select: { id: true, name: true },
+    });
   }
 
   async listActiveAssignedClientIds(appUserId: string): Promise<string[]> {
@@ -134,7 +198,10 @@ export class PrismaAgentRepository implements AgentRepository {
             deviceId: input.deviceId,
             pollLogId: log.id,
             softwareName: change.softwareName,
-            version: change.version,
+            version:
+              change.action === "UPDATED" && change.previousVersion
+                ? `${change.previousVersion} → ${change.version ?? "—"}`
+                : change.version,
             action: change.action as SoftwareChangeAction,
             detectedAt: input.now,
           })),
@@ -190,6 +257,16 @@ export class PrismaAgentRepository implements AgentRepository {
       isStale: boolean;
       polledAt: Date;
       payload: unknown;
+      softwareChanges: Array<{
+        softwareName: string;
+        version: string | null;
+        action: SoftwareChangeAction;
+      }>;
+      hardwareChanges: Array<{
+        changeType: HardwareChangeType;
+        previousValue: unknown;
+        newValue: unknown;
+      }>;
     }>;
     total: number;
   }> {
@@ -201,7 +278,7 @@ export class PrismaAgentRepository implements AgentRepository {
       return { items: [], total: 0 };
     }
     const where = { agentId: agent.id };
-    const [items, total] = await this.prisma.$transaction([
+    const [rows, total] = await this.prisma.$transaction([
       this.prisma.agentPollLog.findMany({
         where,
         skip,
@@ -218,6 +295,60 @@ export class PrismaAgentRepository implements AgentRepository {
       }),
       this.prisma.agentPollLog.count({ where }),
     ]);
+
+    const pollIds = rows.map((r) => r.id);
+    const [softwareRows, hardwareRows] = pollIds.length
+      ? await Promise.all([
+          this.prisma.deviceSoftwareEvent.findMany({
+            where: { pollLogId: { in: pollIds } },
+            select: {
+              pollLogId: true,
+              softwareName: true,
+              version: true,
+              action: true,
+            },
+          }),
+          this.prisma.deviceHardwareChangeEvent.findMany({
+            where: { pollLogId: { in: pollIds } },
+            select: {
+              pollLogId: true,
+              changeType: true,
+              previousValue: true,
+              newValue: true,
+            },
+          }),
+        ])
+      : [[], []];
+
+    const softByPoll = new Map<string, typeof softwareRows>();
+    for (const row of softwareRows) {
+      if (!row.pollLogId) continue;
+      const list = softByPoll.get(row.pollLogId) ?? [];
+      list.push(row);
+      softByPoll.set(row.pollLogId, list);
+    }
+    const hardByPoll = new Map<string, typeof hardwareRows>();
+    for (const row of hardwareRows) {
+      if (!row.pollLogId) continue;
+      const list = hardByPoll.get(row.pollLogId) ?? [];
+      list.push(row);
+      hardByPoll.set(row.pollLogId, list);
+    }
+
+    const items = rows.map((row) => ({
+      ...row,
+      softwareChanges: (softByPoll.get(row.id) ?? []).map((s) => ({
+        softwareName: s.softwareName,
+        version: s.version,
+        action: s.action,
+      })),
+      hardwareChanges: (hardByPoll.get(row.id) ?? []).map((h) => ({
+        changeType: h.changeType,
+        previousValue: h.previousValue,
+        newValue: h.newValue,
+      })),
+    }));
+
     return { items, total };
   }
 }

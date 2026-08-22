@@ -46,6 +46,15 @@ export async function agentDeviceRoutes(fastify: FastifyInstance): Promise<void>
     },
   );
 
+  fastify.post(
+    "/:deviceId/scan",
+    { onRequest: [requireAppUserAuth, requirePermission("Device", "edit")] },
+    async (request, reply) => {
+      const controller = request.container.resolve<AgentController>("agentController");
+      return controller.scanDevice(request, reply);
+    },
+  );
+
   fastify.get(
     "/:deviceId/poll-logs",
     { onRequest: [requireAppUserAuth, requirePermission("Device", "view")] },

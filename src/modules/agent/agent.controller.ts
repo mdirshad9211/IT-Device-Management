@@ -11,6 +11,7 @@ import {
   listPollLogsResponseSchema,
   pollBodySchema,
   pollResponseSchema,
+  scanDeviceResponseSchema,
 } from "./agent.schemas";
 import type { AgentService } from "./agent.service";
 import { paginationSchema } from "../../shared/http/schemas/pagination";
@@ -40,12 +41,31 @@ export class AgentController {
   }
 
   async downloadAgent(request: FastifyRequest, reply: FastifyReply) {
-    const { clientId } = parseQuery(downloadAgentQuerySchema, request);
-    const result = await this.agentService.issueDownloadToken(clientId, {
-      userId: request.user.userId,
-      role: request.user.role,
-    });
-    return reply.status(200).send(downloadAgentResponseSchema.parse(result));
+    const { clientId, format } = parseQuery(downloadAgentQuerySchema, request);
+    const proto = String(request.headers["x-forwarded-proto"] ?? "http");
+    const host = String(request.headers["x-forwarded-host"] ?? request.headers.host ?? "localhost:4000");
+    const apiBaseUrl = `${proto}://${host}`;
+
+    const result = await this.agentService.issueDownloadToken(
+      clientId,
+      {
+        userId: request.user.userId,
+        role: request.user.role,
+      },
+      { apiBaseUrl },
+    );
+
+    if (format === "json") {
+      const { zip: _zip, ...json } = result;
+      return reply.status(200).send(downloadAgentResponseSchema.parse(json));
+    }
+
+    return reply
+      .status(200)
+      .header("Content-Type", "application/zip")
+      .header("Content-Disposition", `attachment; filename="${result.fileName}"`)
+      .header("X-Agent-Download-Expires-At", result.expiresAt)
+      .send(result.zip);
   }
 
   async listPollLogs(request: FastifyRequest, reply: FastifyReply) {
@@ -56,5 +76,14 @@ export class AgentController {
       role: request.user.role,
     });
     return reply.status(200).send(listPollLogsResponseSchema.parse(result));
+  }
+
+  async scanDevice(request: FastifyRequest, reply: FastifyReply) {
+    const { deviceId } = parseParams(deviceIdForPollsParamsSchema, request);
+    const result = await this.agentService.scanDeviceNow(deviceId, {
+      userId: request.user.userId,
+      role: request.user.role,
+    });
+    return reply.status(200).send(scanDeviceResponseSchema.parse(result));
   }
 }

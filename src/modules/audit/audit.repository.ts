@@ -4,7 +4,9 @@ import type { AuditableEvent } from "../../shared/kernel/events";
 export type AuditLogRecord = Pick<
   AuditLog,
   "id" | "entityType" | "entityId" | "action" | "performedBy" | "before" | "after" | "createdAt"
->;
+> & {
+  actor: { id: string; name: string; email: string } | null;
+};
 
 export type AuditListFilter = {
   entityType?: string;
@@ -39,6 +41,7 @@ export class PrismaAuditRepository implements AuditRepository {
         before: true,
         after: true,
         createdAt: true,
+        actor: { select: { id: true, name: true, email: true } },
       },
     });
   }
@@ -68,6 +71,7 @@ export class PrismaAuditRepository implements AuditRepository {
           before: true,
           after: true,
           createdAt: true,
+          actor: { select: { id: true, name: true, email: true } },
         },
       }),
       this.prisma.auditLog.count({ where }),

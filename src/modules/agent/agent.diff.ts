@@ -28,6 +28,8 @@ export type PollPayload = {
 export type SoftwareChange = {
   softwareName: string;
   version: string | null;
+  /** Previous version when action is UPDATED */
+  previousVersion?: string | null;
   action: SoftwareChangeAction;
 };
 export type HardwareChange = {
@@ -91,8 +93,6 @@ export function diffTelemetry(previous: DeviceTelemetry, poll: PollPayload): Tel
 
 /**
  * Classifies a poll as OK vs network vs local agent/OS resource failure.
- * `error` is an out-of-band transport/runtime error; `payload.error` is
- * agent-reported. Transport errors win.
  */
 export function classifyPollStatus(payload: PollPayload | null | undefined, error?: unknown): PollStatus {
   if (error != null) {
@@ -126,30 +126,51 @@ export function mergeTelemetry(previous: DeviceTelemetry, poll: PollPayload): Pa
   return next;
 }
 
-type SoftwareEntry = { name: string; version: string | null };
+export type SoftwareEntry = {
+  name: string;
+  version: string | null;
+  productKey: string | null;
+  installedAt: string | null;
+  updatedAt: string | null;
+};
 
-function softwareKey(entry: SoftwareEntry): string {
-  return `${entry.name}@@${entry.version ?? ""}`;
+function nameKey(name: string): string {
+  return name.trim().toLowerCase();
 }
 
+/**
+ * Diff by software **name** (not name+version) so version bumps become UPDATED
+ * instead of REMOVED + ADDED noise.
+ */
 function diffSoftware(previous: unknown, next: unknown): SoftwareChange[] {
   const prevEntries = normalizeSoftwareEntries(previous);
   const nextEntries = normalizeSoftwareEntries(next);
-  const prevMap = new Map(prevEntries.map((e) => [softwareKey(e), e]));
-  const nextMap = new Map(nextEntries.map((e) => [softwareKey(e), e]));
+  const prevByName = new Map(prevEntries.map((e) => [nameKey(e.name), e]));
+  const nextByName = new Map(nextEntries.map((e) => [nameKey(e.name), e]));
   const changes: SoftwareChange[] = [];
 
-  for (const [key, entry] of nextMap) {
-    if (!prevMap.has(key)) {
+  for (const [key, entry] of nextByName) {
+    const prev = prevByName.get(key);
+    if (!prev) {
       changes.push({
         softwareName: entry.name,
         version: entry.version,
         action: SoftwareChangeAction.ADDED,
       });
+      continue;
+    }
+    const sameVersion = (prev.version ?? "") === (entry.version ?? "");
+    if (!sameVersion) {
+      changes.push({
+        softwareName: entry.name,
+        version: entry.version,
+        previousVersion: prev.version,
+        action: SoftwareChangeAction.UPDATED,
+      });
     }
   }
-  for (const [key, entry] of prevMap) {
-    if (!nextMap.has(key)) {
+  for (const [key, entry] of prevByName) {
+    if (!nextByName.has(key)) {
       changes.push({
         softwareName: entry.name,
         version: entry.version,
@@ -165,7 +186,7 @@ function diffSoftware(previous: unknown, next: unknown): SoftwareChange[] {
   );
 }
 
-/** Normalize agent/UI payloads into `{ name, version }` for Device.installedSoftware. */
+/** Normalize agent/UI payloads into rich software entries for Device.installedSoftware. */
 export function normalizeSoftwareEntries(value: unknown): SoftwareEntry[] {
   if (!Array.isArray(value)) {
     return [];
@@ -175,6 +196,10 @@ export function normalizeSoftwareEntries(value: unknown): SoftwareEntry[] {
   for (const item of value) {
     let name = "";
     let version: string | null = null;
+    let productKey: string | null = null;
+    let installedAt: string | null = null;
+    let updatedAt: string | null = null;
+
     if (typeof item === "string" && item.trim() !== "") {
       const match = item.trim().match(/^(.*)\sv(\S+)$/);
       if (match) {
@@ -184,20 +209,35 @@ export function normalizeSoftwareEntries(value: unknown): SoftwareEntry[] {
         name = item.trim();
       }
     } else if (item && typeof item === "object" && "name" in item) {
-      const rawName = (item as { name: unknown }).name;
+      const rec = item as Record<string, unknown>;
+      const rawName = rec.name;
       if (typeof rawName !== "string" || rawName.trim() === "") continue;
       name = rawName.trim();
-      const versionRaw = (item as { version?: unknown }).version;
+      const versionRaw = rec.version;
       version = typeof versionRaw === "string" && versionRaw.trim() ? versionRaw.trim() : null;
+      const pk = rec.productKey ?? rec.productId;
+      productKey = typeof pk === "string" && pk.trim() ? pk.trim() : null;
+      const inst = rec.installedAt ?? rec.installDate;
+      installedAt = typeof inst === "string" && inst.trim() ? normalizeDateString(inst.trim()) : null;
+      const upd = rec.updatedAt;
+      updatedAt = typeof upd === "string" && upd.trim() ? normalizeDateString(upd.trim()) : null;
     } else {
       continue;
     }
-    const key = softwareKey({ name, version });
+    const key = nameKey(name);
     if (seen.has(key)) continue;
     seen.add(key);
-    entries.push({ name, version });
+    entries.push({ name, version, productKey, installedAt, updatedAt });
   }
   return entries;
+}
+
+function normalizeDateString(raw: string): string {
+  // Windows InstallDate is often YYYYMMDD
+  if (/^\d{8}$/.test(raw)) {
+    return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+  }
+  return raw;
 }
 
 function pushHardware(
@@ -210,14 +250,39 @@ function pushHardware(
   if (!present) {
     return;
   }
-  if (jsonEqual(previousValue ?? null, newValue ?? null)) {
+  if (hardwareValuesEqual(changeType, previousValue ?? null, newValue ?? null)) {
     return;
   }
   target.push({ changeType, previousValue: previousValue ?? null, newValue: newValue ?? null });
 }
 
-function jsonEqual(a: unknown, b: unknown): boolean {
+/** Ignore cosmetic formatting differences for RAM / storage strings. */
+function hardwareValuesEqual(changeType: HardwareChangeType, a: unknown, b: unknown): boolean {
+  if (changeType === HardwareChangeType.RAM || changeType === HardwareChangeType.STORAGE) {
+    const na = extractGb(a);
+    const nb = extractGb(b);
+    if (na != null && nb != null) {
+      return Math.abs(na - nb) < 0.35;
+    }
+    return normalizeHardwareText(a) === normalizeHardwareText(b);
+  }
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function extractGb(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const m = value.replace(/,/g, "").match(/(\d+(?:\.\d+)?)\s*GB/i);
+  return m ? Number(m[1]) : null;
+}
+
+function normalizeHardwareText(value: unknown): string {
+  if (typeof value !== "string") return JSON.stringify(value);
+  return value
+    .toLowerCase()
+    .replace(/,/g, "")
+    .replace(/\b(ssd|hdd|nvme)\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function classifyErrorValue(error: unknown): PollStatus {

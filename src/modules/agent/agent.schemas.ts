@@ -37,11 +37,14 @@ export type DeregisterBody = z.output<typeof deregisterBodySchema>;
 
 export const downloadAgentQuerySchema = z.object({
   clientId: z.string().uuid(),
+  /** zip (default) = installer package download; json = token metadata only */
+  format: z.enum(["zip", "json"]).default("zip"),
 });
 
 export const softwareChangeSchema = z.object({
   softwareName: z.string(),
   version: z.string().nullable(),
+  previousVersion: z.string().nullable().optional(),
   action: z.nativeEnum(SoftwareChangeAction),
 });
 
@@ -61,9 +64,11 @@ export const pollResponseSchema = z.object({
 
 export const downloadAgentResponseSchema = z.object({
   clientId: z.string().uuid(),
+  clientName: z.string().optional(),
   token: z.string().min(1),
   expiresAt: z.string().min(1),
   tokenType: z.literal("agent-download"),
+  fileName: z.string().optional(),
 });
 
 export const deregisterResponseSchema = z.object({
@@ -78,6 +83,8 @@ export const pollLogSchema = z.object({
   isStale: z.boolean(),
   polledAt: z.coerce.date(),
   payload: z.unknown(),
+  softwareChanges: z.array(softwareChangeSchema).default([]),
+  hardwareChanges: z.array(hardwareChangeSchema).default([]),
 });
 
 export const listPollLogsResponseSchema = z.object({
@@ -89,4 +96,16 @@ export const listPollLogsResponseSchema = z.object({
 
 export const deviceIdForPollsParamsSchema = z.object({
   deviceId: z.string().uuid(),
+});
+
+export const scanDeviceResponseSchema = z.object({
+  deviceId: z.string().uuid(),
+  agentId: z.string().uuid(),
+  scannedAt: z.string().min(1),
+  source: z.literal("ui-local-scan"),
+  pollLogId: z.string().uuid(),
+  status: z.nativeEnum(PollStatus),
+  softwareChanges: z.array(softwareChangeSchema),
+  hardwareChanges: z.array(hardwareChangeSchema),
+  storageUsedPercent: z.number().int().nullable(),
 });

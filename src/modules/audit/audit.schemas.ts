@@ -14,6 +14,13 @@ export const auditLogSchema = z.object({
   entityId: z.string(),
   action: z.nativeEnum(AuditAction),
   performedBy: z.string().uuid().nullable(),
+  actor: z
+    .object({
+      id: z.string().uuid(),
+      name: z.string(),
+      email: z.string().email(),
+    })
+    .nullable(),
   before: z.unknown().nullable(),
   after: z.unknown().nullable(),
   createdAt: z.coerce.date(),
